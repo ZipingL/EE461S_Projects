@@ -35,11 +35,11 @@ int parse_command_string(char* command, char* argv[], bool set_first_only)
 {
   char* save;
   int i = 0;
-  inputWords[i] = strtok_r(command, " ", &save);
-  while(inputWords[i] != NULL)
+  argv[i] = strtok_r(command, " ", &save);
+  while(argv[i] != NULL)
   {
     i++;
-    inputWords[i] = strtok_r(NULL, " ", &save);
+    argv[i] = strtok_r(NULL, " ", &save);
 
     // Set just the first argument, useful in some cases
     if(set_first_only)
@@ -238,6 +238,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
+
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -245,18 +246,22 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
+    /* get the actual file name, instead of the name + arguments */
+  int file_char_length = strlen(file_name) + 1;
+  char file_name_no_args[file_char_length];
+  char file_name_cpy[file_char_length];
+  strlcpy(file_name_no_args, file_name, file_char_length);
+  char argv[file_char_length];
+  char** argv_p = &argv;
+  parse_command_string(file_name_no_args, argv_p, true);
+
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
 
-  /* get the actual file name, instead of the name + arguments */
-  int file_length = strlen(file_name) + 1;
-  char file_name_no_args[file_length];
-  strlcpy(file_name_no_args, file_name, file_length);
-  char argv[file_length];
-  parse_command_string(file_name_no_args, &argv, true);
+
 
 
   /* Open executable file. */
@@ -340,8 +345,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  char file_name_cpy[file_length];
-  strlcpy(file_name_cpy, file_name, file_length);
+  file_name_cpy[file_char_length];
+  strlcpy(file_name_cpy, file_name, file_char_length);
   bool setup_stack_success = setup_stack(esp, file_name_cpy);
   if (!setup_stack_success)
     goto done;
@@ -518,13 +523,13 @@ setup_stack (void **esp, char* file_name)
           // decrement esp byte pointer enough to store the argument
           unioned_esp.p_byte -= sizeof(char)*arg_length;
           // copy the arg string into the esp pointer location
-          memcpy(unioned_esp.p_byte, argv[argc_cpy], arg_length)
+          memcpy(unioned_esp.p_byte, argv[argc_cpy], arg_length);
 
           esp_arg_ptrs[argc_cpy] = unioned_esp.p_byte;
           argc_cpy--;
         }
 
-        char_per_word = sizeof(unint32_t) / sizeof(char); // should be four, but why not?
+        int char_per_word = sizeof(uint32_t) / sizeof(char); // should be four, but why not?
 
         /* Add some padding if necessary */
         int remainder = total_args_length_count % char_per_word;
