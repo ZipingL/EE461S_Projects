@@ -537,6 +537,7 @@ setup_stack (void **esp, char* file_name)
         {
           unioned_esp.p_byte -= (char_per_word - remainder);
         }
+        union_esp.p_word--; // set esp pointer to next empty uint32_t element
         /* add null to signify end of argv pointers */
         *unioned_esp.p_word = NULL;         
         unioned_esp.p_word--;
@@ -546,15 +547,16 @@ setup_stack (void **esp, char* file_name)
         while(argc_cpy >= 0)
         {
           *unioned_esp.p_word = esp_arg_ptrs[argc_cpy];
-          unioned_esp.p_word++;
+          unioned_esp.p_word--;
+          argc_cpy--;
         }
         // add a pointer to where argv starts
-        char* temp = unioned_esp.p_word - 1;
+        char* temp = unioned_esp.p_word + 1;
         *unioned_esp.p_word = temp;
-        unioned_esp.p_word ++;
+        unioned_esp.p_word --;
         // add argc data
         *unioned_esp.p_word = argc;
-        unioned_esp.p_word++;
+        unioned_esp.p_word--;
         // add fake return address
         *unioned_esp.p_word = NULL;
 
