@@ -21,6 +21,36 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+
+/* Take in Command String and parse it into words 
+   Returns the Number of arguments processed
+   Assumes that argv[] is large enough to hold all argument string ptrs
+   Messes with the contents of the string command through strtok_r
+   parameter bool set_first_only means that if calling function just
+   wants the first agrv[0] only, then set_first_only is set to true,
+   incase the user wants to just get the command string without the arguments
+   */
+
+int parse_command_string(char* command, char* argv[], bool set_first_only)
+{
+  char* save;
+  int i = 0;
+  inputWords[i] = strtok_r(command, " ", &save);
+  while(inputWords[i] != NULL)
+  {
+    i++;
+    inputWords[i] = strtok_r(NULL, " ", &save);
+
+    // Set just the first argument, useful in some cases
+    if(set_first_only)
+    {
+      break;
+    }
+  }
+
+  return i; // return arg count
+}
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -195,7 +225,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char* file_name);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -221,11 +251,19 @@ load (const char *file_name, void (**eip) (void), void **esp)
     goto done;
   process_activate ();
 
+  /* get the actual file name, instead of the name + arguments */
+  int file_length = strlen(file_name) + 1;
+  char file_name_no_args[file_length];
+  strlcpy(file_name_no_args, file_name, file_length);
+  char argv[1];
+  parse_command_string(file_name, argv, true);
+
+
   /* Open executable file. */
-  file = filesys_open (file_name);
+  file = filesys_open (argv[0]);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", argv[0]);
       goto done; 
     }
 
@@ -236,9 +274,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_machine != 3
       || ehdr.e_version != 1
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
-      || ehdr.e_phnum > 1024) 
+      || ehdr.e_phnum > 1024)
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      printf ("load: %s: error loading executable\n", argv[0]);
       goto done; 
     }
 
@@ -302,7 +340,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  char file_name_cpy[file_length];
+  strlcpy(file_name_cpy, file_name, file_length);
+  bool setup_stack_success = setup_stack(esp, file_name_cpy);
+  if (!setup_stack_success)
     goto done;
 
   /* Start address. */
@@ -312,6 +353,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+  free(argv[0]);
   file_close (file);
   return success;
 }
@@ -426,8 +468,25 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
+
+/*The table below shows the state of an example stack and the relevant registers 
+right before the beginning of the user program, assuming PHYS_BASE is 0xC0000000:
+        Address   Name            Data        Type
+        0xbffffffc  argv[3][...]  "bar\0"     char[4]
+        0xbffffff8  argv[2][...]  "foo\0"     char[4]
+        0xbffffff5  argv[1][...]  "-l\0"      char[3]
+        0xbfffffed  argv[0][...]  "/bin/ls\0" char[8]
+        0xbfffffec  word-align    0           uint8_t
+        0xbfffffe8  argv[4]       0           char *
+        0xbfffffe4  argv[3]       0xbffffffc  char *
+        0xbfffffe0  argv[2]       0xbffffff8  char *
+        0xbfffffdc  argv[1]       0xbffffff5  char *
+        0xbfffffd8  argv[0]       0xbfffffed  char *
+        0xbfffffd4  argv          0xbfffffd8  char **
+        0xbfffffd0  argc          4            int
+        0xbfffffcc  return address  0          void (*) ()*/
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char* file_name) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -437,7 +496,68 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
+      {
         *esp = PHYS_BASE;
+        unioned_esp_pointer_t unioned_esp;
+        unioned_esp.p_byte = (char*) *esp;
+        char argv[MAX_ARGS_COUNT];
+        int argc = parse_command_string(file_name, argv, false);
+        int argc_cpy = argc -1; // make a copy argc so we can use as index
+        // for storing ptrs of where we stored each string in esp 
+        uint32_t* esp_arg_ptrs[MAX_ARGS_COUNT];
+        // for keeping track of the total bytes used,
+        // so we can add necessary padding if need be
+        int total_args_length_count = 0;
+
+
+
+        /*Push the arguments onto the stack*/
+        while(argc_cpy >= 0)
+        {
+          int arg_length = strlen(argv[argc_cpy]) + 1;
+          total_args_length_count+= arg_length;
+          // decrement esp byte pointer enough to store the argument
+          unioned_esp.p_byte -= sizeof(char)*arg_length;
+          // copy the arg string into the esp pointer location
+          memcpy(unioned_esp.p_byte, argv[argc_cpy], arg_length)
+
+          esp_arg_ptrs[argc_cpy] = unioned_esp.p_byte;
+          argc_cpy--;
+        }
+
+        char_per_word = sizeof(unint32_t) / sizeof(char); // should be four, but why not?
+
+        /* Add some padding if necessary */
+        int remainder = total_args_length_count % char_per_word;
+        if(remainder != 0)
+        {
+          unioned_esp.p_byte -= (char_per_word - remainder);
+        }
+        /* add null to signify end of argv pointers */
+        *unioned_esp.p_word = NULL;         
+        unioned_esp.p_word--;
+        argc_cpy = argc-1;
+
+        /* Push the addresses of the args */
+        while(argc_cpy >= 0)
+        {
+          *unioned_esp.p_word = esp_arg_ptrs[argc_cpy];
+          unioned_esp.p_word++;
+        }
+        // add a pointer to where argv starts
+        char* temp = unioned_esp.p_word - 1;
+        *unioned_esp.p_word = temp;
+        unioned_esp.p_word ++;
+        // add argc data
+        *unioned_esp.p_word = argc;
+        unioned_esp.p_word++;
+        // add fake return address
+        *unioned_esp.p_word = NULL;
+
+
+
+
+      }
       else
         palloc_free_page (kpage);
     }
