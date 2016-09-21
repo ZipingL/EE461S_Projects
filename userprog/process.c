@@ -255,15 +255,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
   int file_length = strlen(file_name) + 1;
   char file_name_no_args[file_length];
   strlcpy(file_name_no_args, file_name, file_length);
-  char argv[1];
-  parse_command_string(file_name, argv, true);
+  char argv[file_length];
+  parse_command_string(file_name_no_args, &argv, true);
 
 
   /* Open executable file. */
-  file = filesys_open (argv[0]);
+  file = filesys_open (argv);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", argv[0]);
+      printf ("load: %s: open failed\n", argv);
       goto done; 
     }
 
@@ -276,7 +276,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024)
     {
-      printf ("load: %s: error loading executable\n", argv[0]);
+      printf ("load: %s: error loading executable\n", argv);
       goto done; 
     }
 
@@ -353,7 +353,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  free(argv[0]);
   file_close (file);
   return success;
 }
@@ -500,7 +499,7 @@ setup_stack (void **esp, char* file_name)
         *esp = PHYS_BASE;
         unioned_esp_pointer_t unioned_esp;
         unioned_esp.p_byte = (char*) *esp;
-        char argv[MAX_ARGS_COUNT];
+        char* argv[MAX_ARGS_COUNT];
         int argc = parse_command_string(file_name, argv, false);
         int argc_cpy = argc -1; // make a copy argc so we can use as index
         // for storing ptrs of where we stored each string in esp 
