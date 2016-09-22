@@ -35,7 +35,12 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			f->eax = open(name); //Going to refer from eax from now on as the "status" register
 			break;
 		case SYS_CLOSE:
-			//Not sure just yet, but likely have to create a file descriptor table (unique to each thread, so edit thread.h?). I've tried it for now, we'll see
+			char* name = *(stack_ptr+2); //Just do something almost exactly the same as what was done for SYS_CREATE
+			if (name == NULL || *name == NULL) {
+				exit(-1); //If the pointer or file name is empty, then return an error code
+			}
+			off_t file_size = *(stack_ptr+3);
+			f->eax = close(name, file_size); //The only line different from SYS_OPEN
 			break;
 		case SYS_READ:
 			break;
@@ -139,4 +144,10 @@ unsigned tell (int fd)
     
 /* Closes file descriptor fd. Exiting or terminating a process implicitly closes all its open file descriptors, as if by calling this function for each one. */
 
-void close (int fd)
+void close (int fd) {
+	for (int i = 0; fdtable[i] != NULL; i++) { //Go through all the fd's of the currently open files
+		if (fdtable[fd] != NULL) {
+			fdtable[fd] == NULL; //If the given descriptor corresponds to an open file, close that file's descriptor
+		}
+	}
+}
