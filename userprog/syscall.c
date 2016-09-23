@@ -130,12 +130,25 @@ int read (int fd, void *buffer, unsigned size)
 
     Fd 1 writes to the console. Your code to write to the console should write all of buffer in one call to putbuf(), at least as long as size is not bigger than a few hundred bytes. (It is reasonable to break up larger buffers.) Otherwise, lines of text output by different processes may end up interleaved on the console, confusing both human readers and our grading scripts. */
 
-int write (int fd, const void *buffer, unsigned size) { //Already done in file.c... (super confused now)
+int write (int fd, const void *buffer, unsigned size) { //Already done in file.c, but will implement anyway (super confused now)
 	for (int i = 0; fdtable[i] != NULL; i++) {
 		if (fdtable[fd]) { //Eventually we come across the file we want to write to
 			struct file *fp = fdtable[fd];
 		}
 	}
+
+	if (buffer >= PHYS_BASE) { //Complain about the attempt to write to the kernel
+		exit(-1); //By killing the process
+	}
+	if (fd == 0) { //Complain about the attempt to write to STDIN
+		exit(-1); //Again, the punishment is death
+	}
+
+	while (size >= 10) { //Let's write 10 bytes at a time
+		putbuf(buffer, size);
+		size = size - 10;
+	}
+	putbuf(buffer, size); //Put the rest in the buffer also
 }
 
     /* Changes the next byte to be read or written in open file fd to position, expressed in bytes from the beginning of the file. (Thus, a position of 0 is the file's start.)
