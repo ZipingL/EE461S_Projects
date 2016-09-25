@@ -20,6 +20,7 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+int parse_command_string(char* command, char* argv[], bool set_first_only);
 
 
 /* Take in Command String and parse it into words 
@@ -252,8 +253,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
   char file_name_cpy[file_char_length];
   strlcpy(file_name_no_args, file_name, file_char_length);
   char argv[file_char_length];
-  char** argv_p = &argv;
-  parse_command_string(file_name_no_args, argv_p, true);
+  char* argv_p = argv;
+  //char** argv_p = &argv;
+  parse_command_string(file_name_no_args, &argv_p, true);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -507,8 +509,8 @@ setup_stack (void **esp, char* file_name)
         char* argv[MAX_ARGS_COUNT];
         int argc = parse_command_string(file_name, argv, false);
         int argc_cpy = argc -1; // make a copy argc so we can use as index
-        // for storing ptrs of where we stored each string in esp 
-        uint32_t* esp_arg_ptrs[MAX_ARGS_COUNT];
+        // for storing ptrs of where we stored each string in esp
+        uint32_t* esp_arg_ptrs[MAX_ARGS_COUNT]; //Should this be a pointer to integers or an array of ptrs to integers
         // for keeping track of the total bytes used,
         // so we can add necessary padding if need be
         int total_args_length_count = 0;
@@ -525,7 +527,7 @@ setup_stack (void **esp, char* file_name)
           // copy the arg string into the esp pointer location
           memcpy(unioned_esp.p_byte, argv[argc_cpy], arg_length);
 
-          esp_arg_ptrs[argc_cpy] = unioned_esp.p_byte;
+          esp_arg_ptrs[argc_cpy] = unioned_esp.p_byte; //This should then be a pointer that is assigned
           argc_cpy--;
         }
 
