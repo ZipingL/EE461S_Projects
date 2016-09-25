@@ -537,7 +537,7 @@ setup_stack (void **esp, char* file_name)
         {
           unioned_esp.p_byte -= (char_per_word - remainder);
         }
-        union_esp.p_word--; // set esp pointer to next empty uint32_t element
+        unioned_sp.p_word--; // set esp pointer to next empty uint32_t element
         /* add null to signify end of argv pointers */
         *unioned_esp.p_word = NULL;         
         unioned_esp.p_word--;
