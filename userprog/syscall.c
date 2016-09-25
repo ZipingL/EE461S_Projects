@@ -16,30 +16,33 @@ static void
 syscall_handler (struct intr_frame *f) //UNUSED) 
 {
 	//Assume that the esp pointer goes to the top of the stack (looks at return address)
-	uint32_t stack_ptr = f->esp+1; //Create a pointer to the top of the stack (looks at argc first and adds 1 as the first entry on the stack is the return address)
+	uint32_t stack_ptr =*(f->esp+3); //Create a pointer to the top of the stack (looks at argv[0])
+	char* name;
+	off_t file_size;
+
 	switch(*stack_ptr) { //This gives us the command that needs to be executed
 		case SYS_CREATE: //A pre-defined constant that refers to a "create" call
-			char* name = *(stack_ptr+2); //With this, we can load the name of the file
+			name = *(stack_ptr+1); //With this, we can load the name of the file
 			if (name == NULL || *name == NULL) {
 				exit(-1); //If the pointer or file name is empty, then return an error code
 			}
-			off_t file_size = *(stack_ptr+3); //Now get the second arg: the size of the file
+			file_size = *(stack_ptr+2); //Now get the second arg: the size of the file
 			f->eax = create(name, file_size); //Create the file and then save the status to the eax register
 			break;
 			//(Does this mean that eax is just some storage register. What is it really??)
 		case SYS_OPEN: //A pre-defined constant that refers to an "open" call
-			char* name = *(stack_ptr+2); //This looks just to the first and only needed parameter, the file to open
+			name = *(stack_ptr+1); //This looks just to the first and only needed parameter, the file to open
 			if (name == NULL || *name == NULL) { //Check for a non-existant file of course
 				exit(-1);
 			}
 			f->eax = open(name); //Going to refer from eax from now on as the "status" register
 			break;
 		case SYS_CLOSE:
-			char* name = *(stack_ptr+2); //Just do something almost exactly the same as what was done for SYS_CREATE
+			name = *(stack_ptr+1); //Just do something almost exactly the same as what was done for SYS_CREATE
 			if (name == NULL || *name == NULL) {
 				exit(-1); //If the pointer or file name is empty, then return an error code
 			}
-			off_t file_size = *(stack_ptr+3);
+			file_size = *(stack_ptr+2);
 			f->eax = close(name, file_size); //The only line different from SYS_OPEN
 			break;
 		case SYS_READ:
