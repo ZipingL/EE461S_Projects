@@ -98,9 +98,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-  initial_thread->fdtable[0] = 0;
-  initial_thread->fdtable[1] = 1;
-  initial_thread->fdtable[2] = 2; /* Set up the file descriptor table as well */
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.

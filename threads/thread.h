@@ -85,7 +85,6 @@ struct thread
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
-	char* fdtable[300];					/* A table to hold the thread's current files */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
@@ -97,6 +96,9 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct list fd_table;               /* A linked list to hold the thread's current files */
+    int fd_table_counter; /* Counts how many fd entries have been added
+                            For determining fd values to assign */
 #endif
 
     /* Owned by thread.c. */

@@ -3,8 +3,22 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "devices/shutdown.h"
+#include "userprog/process.h"
+#include "filesys/filesys.h"
+
+typedef int pid_t;
+
 
 static void syscall_handler (struct intr_frame *);
+struct list_element* find_fd_element(int fd, struct thread* current_thread);
+bool create (const char *file, unsigned initial_size);
+int open (const char *file);
+
+bool close (int fd);
+
+void exit (int status, struct intr_frame *f);
 
 void
 syscall_init (void) 
@@ -16,15 +30,18 @@ static void
 syscall_handler (struct intr_frame *f) //UNUSED) 
 {
 	//Assume that the esp pointer goes to the top of the stack (looks at return address)
-	uint32_t stack_ptr =*(f->esp+3); //Create a pointer to the top of the stack (looks at argv[0])
-	char* name;
-	off_t file_size;
+	uint32_t* system_call_number =* (uint32_t**)(f->esp+0); //Create a pointer to the top of the stack (looks at argv[0])
+	uint32_t* stack_ptr = * (uint32_t**)(f->esp+0); // Two pointers with same address, but using different names
+	// to avoid confusion in usage
+	char* name = NULL;
+	uint32_t file_size = 0;
+	int fd = -1;
 
-	switch(*stack_ptr) { //This gives us the command that needs to be executed
+	switch(*system_call_number) { //This gives us the command that needs to be executed
 		case SYS_CREATE: //A pre-defined constant that refers to a "create" call
 			name = *(stack_ptr+1); //With this, we can load the name of the file
 			if (name == NULL || *name == NULL) {
-				exit(-1); //If the pointer or file name is empty, then return an error code
+				exit(-1, f); //If the pointer or file name is empty, then return an error code
 			}
 			file_size = *(stack_ptr+2); //Now get the second arg: the size of the file
 			f->eax = create(name, file_size); //Create the file and then save the status to the eax register
@@ -33,22 +50,23 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 		case SYS_OPEN: //A pre-defined constant that refers to an "open" call
 			name = *(stack_ptr+1); //This looks just to the first and only needed parameter, the file to open
 			if (name == NULL || *name == NULL) { //Check for a non-existant file of course
-				exit(-1);
+				exit(-1, f);
 			}
 			f->eax = open(name); //Going to refer from eax from now on as the "status" register
 			break;
 		case SYS_CLOSE:
-			name = *(stack_ptr+1); //Just do something almost exactly the same as what was done for SYS_CREATE
+			fd = *(stack_ptr+1); //Just do something almost exactly the same as what was done for SYS_CREATE
 			if (name == NULL || *name == NULL) {
-				exit(-1); //If the pointer or file name is empty, then return an error code
+				exit(-1, f); //If the pointer or file name is empty, then return an error code
 			}
 			file_size = *(stack_ptr+2);
-			f->eax = close(name, file_size); //The only line different from SYS_OPEN
+			f->eax = close(fd); //The only line different from SYS_OPEN
 			break;
 		case SYS_READ:
 			break;
 		case SYS_WRITE:
 			break;
+		}
   printf ("system call!\n");
   thread_exit ();
 }
@@ -68,7 +86,7 @@ void exit (int status, struct intr_frame *f) {
 
 /* Runs the executable whose name is given in cmd_line, passing any given arguments, and returns the new process's program id (pid). Must return pid -1, which otherwise should not be a valid pid, if the program cannot load or run for any reason. Thus, the parent process cannot return from the exec until it knows whether the child process successfully loaded its executable. You must use appropriate synchronization to ensure this. */
 
-pid_t exec (const char *cmd_line)
+//id_t exec (const char *cmd_line)
 
  /* Waits for a child process pid and retrieves the child's exit status.
 
@@ -89,12 +107,14 @@ int wait (pid_t pid) {
 /* Creates a new file called file initially initial_size bytes in size. Returns true if successful, false otherwise. Creating a new file does not open it: opening the new file is a separate operation which would require a open system call. */
 
 bool create (const char *file, unsigned initial_size) {
-	filesys_create(file, initial_size); //Already in filesys.c...
+	bool return_bool = filesys_create(file, initial_size); //Already in filesys.c...
+
+	return return_bool;
 }
 
 /* Deletes the file called file. Returns true if successful, false otherwise. A file may be removed regardless of whether it is open or closed, and removing an open file does not close it. See Removing an Open File, for details. */
 
-bool remove (const char *file)
+//bool remove (const char *file)
 
 /* Opens the file called file. Returns a nonnegative integer handle called a "file descriptor" (fd), or -1 if the file could not be opened.
 
@@ -105,27 +125,25 @@ bool remove (const char *file)
     When a single file is opened more than once, whether by a single process or different processes, each open returns a new file descriptor. Different file descriptors for a single file are closed independently in separate calls to close and they do not share a file position. */
 
 int open (const char *file) {
-	int newfd = -1;
-	file* fp = filesys_open(file); //Again, already in filesys.c
+
+	struct thread* current_thread = thread_current();
+	struct file* fp = filesys_open(file); //Again, already in filesys.c
+	int return_fd = -1;
 	/* Now update the file descriptor table */
 	if (fp != NULL) {
-		for (int i = 0; thread->fdtable[i] != NULL || i < 299; i++) { //The fd table right now has 300 entries
-			if (thread->fdtable[i+1] == NULL) { //If we notice that the next entry is open
-				fdtable[i+1] = file; //Now associate the file with a new file descriptor (1 more than the previous)
-				return i+1; //Return the new file descriptor upon successful opening
-			}
-		}
+
+		return_fd = add_file_to_fd_table(current_thread, fp);
 	}
-	return -1; //The file could not be assigned a new file descriptor
+	return return_fd; // IF The file could not be assigned a new file descriptor, then return_fd == -1
 }
 
 /* Returns the size, in bytes, of the file open as fd. */
 
-int filesize (int fd)
+//int filesize (int fd)
 
 /* Reads size bytes from the file open as fd into buffer. Returns the number of bytes actually read (0 at end of file), or -1 if the file could not be read (due to a condition other than end of file). Fd 0 reads from the keyboard using input_getc(). */
 
-int read (int fd, void *buffer, unsigned size)
+//int read (int fd, void *buffer, unsigned size)
 
 /* Writes size bytes from buffer to the open file fd. Returns the number of bytes actually written, which may be less than size if some bytes could not be written.
 
@@ -134,42 +152,95 @@ int read (int fd, void *buffer, unsigned size)
     Fd 1 writes to the console. Your code to write to the console should write all of buffer in one call to putbuf(), at least as long as size is not bigger than a few hundred bytes. (It is reasonable to break up larger buffers.) Otherwise, lines of text output by different processes may end up interleaved on the console, confusing both human readers and our grading scripts. */
 
 int write (int fd, const void *buffer, unsigned size) { //Already done in file.c, but will implement anyway (super confused now)
-	for (int i = 0; fdtable[i] != NULL; i++) {
-		if (fdtable[fd]) { //Eventually we come across the file we want to write to
-			struct file *fp = fdtable[fd];
-		}
-	}
+		
+	struct thread* current_thread = thread_current();
+	struct file* fp = NULL;
+	int return_size = -1;
 
-	if (buffer >= PHYS_BASE) { //Complain about the attempt to write to the kernel
+// TODO: Calling Exit won't work here, requires two arguments, see syscall.c -> exit()
+	// Alternatively, you could add the second arg required in the parameter list for write
+	// but we may not want to do that, if this error can be managed from the calling function
+/*	
+	// Why are we doing this?
+	if (buffer >= PHYS_BASE) { //Complain about the attemplt to write to the kernel
 		exit(-1); //By killing the process
 	}
 	if (fd == 0) { //Complain about the attempt to write to STDIN
 		exit(-1); //Again, the punishment is death
-	}
-
-	while (size >= 10) { //Let's write 10 bytes at a time
+	} */
+	if (fd == 1) // TODO: I don't think this works
+	{	
+		while (size >= 10) { //Let's write 10 bytes at a time
 		putbuf(buffer, size);
 		size = size - 10;
+		}
+		putbuf(buffer, size); //Put the rest in the buffer also
+
 	}
-	putbuf(buffer, size); //Put the rest in the buffer also
+	else if (fd != 0) {
+		struct list_elem* e = find_fd_element(fd, current_thread);
+		struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
+		return_size = file_write (fd_element->fp, buffer, size) ;
+	}
+
+	return return_size;
 }
 
     /* Changes the next byte to be read or written in open file fd to position, expressed in bytes from the beginning of the file. (Thus, a position of 0 is the file's start.)
 
     A seek past the current end of a file is not an error. A later read obtains 0 bytes, indicating end of file. A later write extends the file, filling any unwritten gap with zeros. (However, in Pintos files have a fixed length until project 4 is complete, so writes past end of file will return an error.) These semantics are implemented in the file system and do not require any special effort in system call implementation. */
 
-void seek (int fd, unsigned position)
+//void seek (int fd, unsigned position)
 
 /* Returns the position of the next byte to be read or written in open file fd, expressed in bytes from the beginning of the file. */
 
-unsigned tell (int fd)
+//unsigned tell (int fd)
     
 /* Closes file descriptor fd. Exiting or terminating a process implicitly closes all its open file descriptors, as if by calling this function for each one. */
 
-void close (int fd) {
-	for (int i = 0; fdtable[i] != NULL; i++) { //Go through all the fd's of the currently open files
-		if (fdtable[fd] != NULL) {
-			fdtable[fd] == NULL; //If the given descriptor corresponds to an open file, close that file's descriptor
-		}
-	}
+bool close (int fd) {
+	struct thread* current_thread = thread_current();
+	struct list_elem* e = find_fd_element(fd, current_thread);
+	if(e == NULL) return false; // return false if fd not found
+	struct list_elem*  return_e = list_remove (e);
+	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
+	free(fd_element); // Free the element we just removed, please also see open()
+	return true;
+
+
+}
+
+// Find the element in the linkedlist coressponding to the given fd
+// Uses: Returns the list_element* type
+// 			You can thus then use this returned type to remove element or
+//          Edit the contents of the actual element
+// You can view an example of these two uses in void close function above
+struct list_element* find_fd_element(int fd, struct thread* current_thread)
+{
+	    struct list_elem *e;
+      	// search through the fd_table for the matching fd 
+		for (e = list_begin (&current_thread->fd_table); e != list_end (&current_thread->fd_table);
+           e = list_next (e))
+        {
+          struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
+          if(fd_element->fd == fd)
+          {
+          	return e;
+          }
+        }
+
+        return NULL;
+}
+
+int add_file_to_fd_table(struct thread* current_thread, struct file* fp)
+{
+		int return_fd = -1;
+		struct fd_list_element* fd_element = malloc(sizeof(struct fd_list_element));
+		fd_element->fd = current_thread->fd_table_counter;
+		fd_element->fp = fp;
+		return_fd = fd_element->fd;
+
+		list_push_back(&current_thread->fd_table, &fd_element->elem_fd);
+		current_thread->fd_table_counter++; // increment counter, so we have a new fd to use for the next file
+		return return_fd;
 }

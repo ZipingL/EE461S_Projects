@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "lib/kernel/list.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -71,9 +72,23 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+  else {
+
+      /* Initialize data in thread */
+      struct thread* current_thread = thread_current();
+      // see lib/kernel/list.h for how to use linked list pintos version
+      // we must initialze the list first to use it:
+      list_init(&current_thread->fd_table);
+      current_thread->fd_table_counter = 2;
+
+  }
   return tid;
+
+
+
 }
 
 /* A thread function that loads a user process and starts it

@@ -1,4 +1,4 @@
-# Project2 - Process API and SysCalls
+ Project2 - Process API and SysCalls
 
 This is the [User Programs][userprog] project in Pintos. To get started:
 

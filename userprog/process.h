@@ -16,4 +16,11 @@ typedef union {
 	char* p_byte;
 } unioned_esp_pointer_t;
 
+// This is for our linked list of fds
+struct fd_list_element {
+	struct list_elem elem_fd;
+	int fd;
+	struct file* fp;
+};
+
 #endif /* userprog/process.h */
