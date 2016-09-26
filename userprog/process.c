@@ -72,8 +72,15 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* get the actual file name, instead of the name + arguments */
+  int file_char_length = strlen(file_name) + 1;
+  char file_name_no_args[file_char_length];
+  strlcpy(file_name_no_args, file_name, file_char_length);
+  char* argv[1];
+  parse_command_string(file_name_no_args, argv, true);
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (argv[0], PRI_DEFAULT, start_process, fn_copy);
 
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
@@ -127,8 +134,15 @@ start_process (void *file_name_)
    been successfully called for the given TID, returns -1
    immediately, without waiting.
 
+
+
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
+
+   // TODO: This function is not done, this is not the correct way 
+   // it's just a hack that barely works, need to implement
+   // parent and child lists
+   
 int
 process_wait (tid_t child_tid UNUSED) 
 {
@@ -147,6 +161,7 @@ process_wait (tid_t child_tid UNUSED)
 }
 
 /* Free the current process's resources. */
+/*TODO*/
 void
 process_exit (void)
 {
@@ -617,3 +632,4 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
+
