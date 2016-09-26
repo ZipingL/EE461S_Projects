@@ -77,7 +77,6 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			printf("This shouldn't happen");
 			break;
 		}
-  printf ("system call!\n");
   thread_exit ();
 }
 

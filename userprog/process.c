@@ -132,7 +132,18 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-   return -1;
+  bool wait = false;
+  while(find_thread(child_tid) != NULL)
+  {
+    wait = true;
+  }
+#ifdef PROJECT2_DEBUG
+  printf("process_wait bool: %d\n", wait);
+#endif
+  if(wait)
+    return 1;
+  else
+    return -1;
 }
 
 /* Free the current process's resources. */
