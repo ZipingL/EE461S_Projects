@@ -73,11 +73,18 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			f->eax = write(fd, buffer, file_size);
 
 			break;
+
+		    case SYS_EXIT:
+		      {
+				fd = *(stack_ptr+1);
+				exit(fd, f);
+				break;
+		      }
 		default:
 			printf("This shouldn't happen");
 			break;
 		}
-  thread_exit ();
+
 }
 
 /* Terminates Pintos by calling shutdown_power_off() (declared in "threads/init.h"). This should be seldom used, because you lose some information about possible deadlock situations, etc. */
@@ -180,8 +187,9 @@ int write (int fd, const void *buffer, unsigned size) { //Already done in file.c
 	if (fd == 1) // 
 	{	
 		putbuf(buffer, size);
+		return_size = size;
 	}
-	else if (fd != 0) {
+	else if (fd != 0 && fd !=1) {
 		struct list_elem* e = find_fd_element(fd, current_thread);
 		struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
 		return_size = file_write (fd_element->fp, buffer, size) ;

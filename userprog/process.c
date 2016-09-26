@@ -141,7 +141,7 @@ process_wait (tid_t child_tid UNUSED)
   printf("process_wait bool: %d\n", wait);
 #endif
   if(wait)
-    return 1;
+    return 1; //TODO: Return child exit status
   else
     return -1;
 }
