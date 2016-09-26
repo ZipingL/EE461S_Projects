@@ -199,6 +199,12 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  /* Set up fd_table */
+  // see lib/kernel/list.h for how to use linked list pintos version
+  // we must initialze the list first to use it:
+  list_init(&t->fd_table);
+  t->fd_table_counter = 2;
+
   /* Add to run queue. */
   thread_unblock (t);
 

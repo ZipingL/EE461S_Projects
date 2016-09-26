@@ -35,6 +35,8 @@ int parse_command_string(char* command, char* argv[], bool set_first_only);
 
 int parse_command_string(char* command, char* argv[], bool set_first_only)
 {
+
+
   char* save;
   int i = 0;
   argv[i] = strtok_r(command, " ", &save);
@@ -78,11 +80,7 @@ process_execute (const char *file_name)
   else {
 
       /* Initialize data in thread */
-      struct thread* current_thread = thread_current();
-      // see lib/kernel/list.h for how to use linked list pintos version
-      // we must initialze the list first to use it:
-      list_init(&current_thread->fd_table);
-      current_thread->fd_table_counter = 2;
+
 
   }
   return tid;
@@ -134,7 +132,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+   return -1;
 }
 
 /* Free the current process's resources. */
@@ -267,10 +265,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   char file_name_no_args[file_char_length];
   char file_name_cpy[file_char_length];
   strlcpy(file_name_no_args, file_name, file_char_length);
-  char argv[file_char_length];
-  char* argv_p = argv;
-  //char** argv_p = &argv;
-  parse_command_string(file_name_no_args, &argv_p, true);
+  char* argv[1];
+  parse_command_string(file_name_no_args, argv, true);
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
@@ -279,13 +275,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
 
-
-
   /* Open executable file. */
-  file = filesys_open (argv);
+  file = filesys_open (argv[0]);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", argv);
+      printf ("load: %s: open failed\n", argv[0]);
       goto done; 
     }
 
@@ -298,7 +292,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024)
     {
-      printf ("load: %s: error loading executable\n", argv);
+      printf ("load: %s: error loading executable\n", argv[0]);
       goto done; 
     }
 
@@ -361,7 +355,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
         }
     }
 
-  /* Set up stack. */
+  /* Set up stack. */ //printf("Set up stack\n");
   file_name_cpy[file_char_length];
   strlcpy(file_name_cpy, file_name, file_char_length);
   bool setup_stack_success = setup_stack(esp, file_name_cpy);
@@ -546,6 +540,7 @@ setup_stack (void **esp, char* file_name)
           argc_cpy--;
         }
 
+
         int char_per_word = sizeof(uint32_t) / sizeof(char); // should be four, but why not?
 
         /* Add some padding if necessary */
@@ -559,6 +554,7 @@ setup_stack (void **esp, char* file_name)
         *unioned_esp.p_word = NULL;         
         unioned_esp.p_word--;
         argc_cpy = argc-1;
+
 
         /* Push the addresses of the args */
         while(argc_cpy >= 0)
@@ -577,8 +573,12 @@ setup_stack (void **esp, char* file_name)
         // add fake return address
         *unioned_esp.p_word = NULL;
 
-
-
+/*
+        printf("%d %d\n", unioned_esp.p_word, *esp);
+        printf("%s %s %s\n", esp_arg_ptrs[0], esp_arg_ptrs[1], esp_arg_ptrs[2]);
+        printf("%s %s %s \n", *((char**)(*(unioned_esp.p_word + 2))+1), *(unioned_esp.p_word + 4), *(unioned_esp.p_word + 5));
+        */
+        *esp = unioned_esp.p_word;
 
       }
       else

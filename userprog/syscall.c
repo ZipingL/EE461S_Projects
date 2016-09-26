@@ -19,6 +19,7 @@ int open (const char *file);
 bool close (int fd);
 
 void exit (int status, struct intr_frame *f);
+int write (int fd, const void *buffer, unsigned size);
 
 void
 syscall_init (void) 
@@ -30,14 +31,14 @@ static void
 syscall_handler (struct intr_frame *f) //UNUSED) 
 {
 	//Assume that the esp pointer goes to the top of the stack (looks at return address)
-	uint32_t* system_call_number =* (uint32_t**)(f->esp+0); //Create a pointer to the top of the stack (looks at argv[0])
-	uint32_t* stack_ptr = * (uint32_t**)(f->esp+0); // Two pointers with same address, but using different names
+	uint32_t system_call_number =* (uint32_t**)(f->esp+0); //Create a pointer to the top of the stack (looks at argv[0])
+	uint32_t* stack_ptr =  (uint32_t*)(f->esp+0); // Two pointers with same address, but using different names
 	// to avoid confusion in usage
 	char* name = NULL;
 	uint32_t file_size = 0;
 	int fd = -1;
 
-	switch(*system_call_number) { //This gives us the command that needs to be executed
+	switch(system_call_number) { //This gives us the command that needs to be executed
 		case SYS_CREATE: //A pre-defined constant that refers to a "create" call
 			name = *(stack_ptr+1); //With this, we can load the name of the file
 			if (name == NULL || *name == NULL) {
@@ -56,7 +57,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			break;
 		case SYS_CLOSE:
 			fd = *(stack_ptr+1); //Just do something almost exactly the same as what was done for SYS_CREATE
-			if (name == NULL || *name == NULL) {
+			if (fd <= 0) {
 				exit(-1, f); //If the pointer or file name is empty, then return an error code
 			}
 			file_size = *(stack_ptr+2);
@@ -65,6 +66,15 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 		case SYS_READ:
 			break;
 		case SYS_WRITE:
+			fd = *(stack_ptr+1);
+			void* buffer = *(stack_ptr+2);
+			file_size = *(stack_ptr+3);
+
+			f->eax = write(fd, buffer, file_size);
+
+			break;
+		default:
+			printf("This shouldn't happen");
 			break;
 		}
   printf ("system call!\n");
@@ -168,14 +178,9 @@ int write (int fd, const void *buffer, unsigned size) { //Already done in file.c
 	if (fd == 0) { //Complain about the attempt to write to STDIN
 		exit(-1); //Again, the punishment is death
 	} */
-	if (fd == 1) // TODO: I don't think this works
+	if (fd == 1) // 
 	{	
-		while (size >= 10) { //Let's write 10 bytes at a time
 		putbuf(buffer, size);
-		size = size - 10;
-		}
-		putbuf(buffer, size); //Put the rest in the buffer also
-
 	}
 	else if (fd != 0) {
 		struct list_elem* e = find_fd_element(fd, current_thread);
