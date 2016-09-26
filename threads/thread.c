@@ -605,12 +605,13 @@ struct thread* find_thread (tid_t tid)
   for (e = list_begin (&all_list); e != list_end (&all_list);
        e = list_next (e))
     {
+      if(e == NULL) continue; 
       struct thread *t = list_entry (e, struct thread, allelem);
       if(t!= NULL && t->tid == tid)
         return t;
     }
 
-    
+
 
 
   

@@ -10,7 +10,8 @@
 
 typedef int pid_t;
 
-
+static int
+get_user (const uint8_t *uaddr);
 static void syscall_handler (struct intr_frame *);
 struct list_element* find_fd_element(int fd, struct thread* current_thread);
 bool create (const char *file, unsigned initial_size);
@@ -30,6 +31,11 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) //UNUSED) 
 {
+	//Check for valid esp
+	if(get_user(f->esp) == -1)
+		exit(-1, f);
+
+
 	//Assume that the esp pointer goes to the top of the stack (looks at return address)
 	uint32_t system_call_number =* (uint32_t**)(f->esp+0); //Create a pointer to the top of the stack (looks at argv[0])
 	uint32_t* stack_ptr =  (uint32_t*)(f->esp+0); // Two pointers with same address, but using different names
@@ -40,6 +46,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 
 	switch(system_call_number) { //This gives us the command that needs to be executed
 		case SYS_CREATE: //A pre-defined constant that refers to a "create" call
+		{
 			name = *(stack_ptr+1); //With this, we can load the name of the file
 			if (name == NULL || *name == NULL) {
 				exit(-1, f); //If the pointer or file name is empty, then return an error code
@@ -47,15 +54,19 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			file_size = *(stack_ptr+2); //Now get the second arg: the size of the file
 			f->eax = create(name, file_size); //Create the file and then save the status to the eax register
 			break;
+		}
 			//(Does this mean that eax is just some storage register. What is it really??)
 		case SYS_OPEN: //A pre-defined constant that refers to an "open" call
+		{
 			name = *(stack_ptr+1); //This looks just to the first and only needed parameter, the file to open
 			if (name == NULL || *name == NULL) { //Check for a non-existant file of course
 				exit(-1, f);
 			}
 			f->eax = open(name); //Going to refer from eax from now on as the "status" register
 			break;
+		}
 		case SYS_CLOSE:
+		{
 			fd = *(stack_ptr+1); //Just do something almost exactly the same as what was done for SYS_CREATE
 			if (fd <= 0) {
 				exit(-1, f); //If the pointer or file name is empty, then return an error code
@@ -63,9 +74,17 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			file_size = *(stack_ptr+2);
 			f->eax = close(fd); //The only line different from SYS_OPEN
 			break;
+		}
 		case SYS_READ:
+		{
+			fd = *(stack_ptr+1);
+			void* buffer = *(stack_ptr+2);
+			file_size = *(stack_ptr+3);
+			f->eax = read(fd, buffer, file_size);
 			break;
+		}
 		case SYS_WRITE:
+		{
 			fd = *(stack_ptr+1);
 			void* buffer = *(stack_ptr+2);
 			file_size = *(stack_ptr+3);
@@ -73,18 +92,39 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			f->eax = write(fd, buffer, file_size);
 
 			break;
+		}
 
-		    case SYS_EXIT:
-		      {
-				fd = *(stack_ptr+1);
-				exit(fd, f);
-				break;
-		      }
-		default:
-			printf("This shouldn't happen");
+		case SYS_FILESIZE:
+		{
+			fd = *(stack_ptr + 1);
+			f->eax = filesize_get(fd);
 			break;
 		}
 
+		case SYS_EXIT:
+	      {
+			fd = *(stack_ptr+1);
+			exit(fd, f);
+			break;
+	      }
+		default:
+		{
+			#ifdef PROJECT2_DEBUG
+			printf("SYSCALL function not found, number:%d\n", system_call_number);
+			#endif
+			break;
+		}
+		}
+
+}
+/* Used by syscall_filesize*/
+int filesize_get(int fd)
+{
+	struct thread* current_thread = thread_current();
+	struct list_elem* e = find_fd_element(fd, current_thread);
+	if(e == NULL) return -1; // return false if fd not found TODO?
+	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
+	return file_length (fd_element -> fp) ;
 }
 
 /* Terminates Pintos by calling shutdown_power_off() (declared in "threads/init.h"). This should be seldom used, because you lose some information about possible deadlock situations, etc. */
@@ -97,6 +137,9 @@ void halt (void) {
 
 void exit (int status, struct intr_frame *f) {
 	f->eax = status; //Save the status that was returned by the existing process to the stack
+	struct thread* t = thread_current();
+	printf ("%s: exit(%d)\n", t->name, status);
+	process_exit();
 	thread_exit(); //A function in thread.h that terminates and removes from the list of threads the current thread t. t's status also becomes THREAD_DYING
 }
 
@@ -159,7 +202,21 @@ int open (const char *file) {
 
 /* Reads size bytes from the file open as fd into buffer. Returns the number of bytes actually read (0 at end of file), or -1 if the file could not be read (due to a condition other than end of file). Fd 0 reads from the keyboard using input_getc(). */
 
-//int read (int fd, void *buffer, unsigned size)
+int read (int fd, void *buffer, unsigned size)
+{
+	if(fd == 0)
+	{
+/*TODO, read from stdin*/
+	}
+
+	else if (fd != 1)
+	{
+		struct thread* t = thread_current();
+		struct list_elem* e = find_fd_element(fd, t);
+		struct fd_list_element *fd_element = list_entry(e, struct fd_list_element, elem_fd);
+		return file_read (fd_element->fp, buffer, size) ;
+	}
+}
 
 /* Writes size bytes from buffer to the open file fd. Returns the number of bytes actually written, which may be less than size if some bytes could not be written.
 
@@ -255,4 +312,31 @@ int add_file_to_fd_table(struct thread* current_thread, struct file* fp)
 		list_push_back(&current_thread->fd_table, &fd_element->elem_fd);
 		current_thread->fd_table_counter++; // increment counter, so we have a new fd to use for the next file
 		return return_fd;
+}
+
+
+ 	
+/* Reads a byte at user virtual address UADDR.
+   UADDR must be below PHYS_BASE.
+   Returns the byte value if successful, -1 if a segfault
+   occurred. */
+static int
+get_user (const uint8_t *uaddr)
+{
+  int result;
+  asm ("movl $1f, %0; movzbl %1, %0; 1:"
+       : "=&a" (result) : "m" (*uaddr));
+  return result;
+}
+ 
+/* Writes BYTE to user address UDST.
+   UDST must be below PHYS_BASE.
+   Returns true if successful, false if a segfault occurred. */
+static bool
+put_user (uint8_t *udst, uint8_t byte)
+{
+  int error_code;
+  asm ("movl $1f, %0; movb %b2, %1; 1:"
+       : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+  return error_code != -1;
 }
