@@ -37,6 +37,8 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+
+
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
   {
@@ -382,7 +384,6 @@ thread_get_recent_cpu (void)
   /* Not yet implemented. */
   return 0;
 }
-
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -590,8 +591,7 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 
 
-/* Invoke function 'func' on all threads, passing along 'aux'.
-   This function must be called with interrupts off. */
+/* Find a thread based on given tid, from the all_list (linked list of active threads) */
 
 struct thread* find_thread (tid_t tid)
 {
@@ -610,9 +610,5 @@ struct thread* find_thread (tid_t tid)
         return t;
     }
 
-
-
-
-  
   return NULL;
 }

@@ -139,10 +139,20 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 
-   // TODO: This function is not done, this is not the correct way 
+      // TODO: This function is not done, this is not the correct way 
    // it's just a hack that barely works, need to implement
    // parent and child lists
-   
+   // A correct process wait involves looking at the current thread's
+   // child_list, finding the child from the child_tid, and
+   // then wait on it.
+   // Right now, we are just looking at a list of all threads
+   // and waiting on that, so we have no way of knowing whether or not
+   // the child_tid is actually a child of the thread,
+   // and we have no way of waiting for the child_tid's children too.
+   // We should not be looking at threads, we need to move up an abstraction
+   // into process, since using threads to check a process's status
+   // can cause issues, for example, we are failing a few tests
+   // I think due to the this.
 int
 process_wait (tid_t child_tid UNUSED) 
 {

@@ -77,8 +77,12 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 		}
 		case SYS_READ:
 		{
+
 			fd = *(stack_ptr+1);
 			void* buffer = *(stack_ptr+2);
+			//Check for valid buffer
+			if(get_user(buffer) == -1)
+				exit(-1, f);
 			file_size = *(stack_ptr+3);
 			f->eax = read(fd, buffer, file_size);
 			break;
@@ -87,6 +91,9 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 		{
 			fd = *(stack_ptr+1);
 			void* buffer = *(stack_ptr+2);
+			//Check for valid buffer
+			if(get_user(buffer) == -1)
+					exit(-1, f);
 			file_size = *(stack_ptr+3);
 
 			f->eax = write(fd, buffer, file_size);
@@ -136,6 +143,8 @@ void halt (void) {
 /* Terminates the current user program, returning status to the kernel. If the process's parent waits for it (see below), this is the status that will be returned. Conventionally, a status of 0 indicates success and nonzero values indicate errors. */
 
 void exit (int status, struct intr_frame *f) {
+
+
 	f->eax = status; //Save the status that was returned by the existing process to the stack
 	struct thread* t = thread_current();
 	printf ("%s: exit(%d)\n", t->name, status);
@@ -204,6 +213,8 @@ int open (const char *file) {
 
 int read (int fd, void *buffer, unsigned size)
 {
+
+
 	if(fd == 0)
 	{
 /*TODO, read from stdin*/
@@ -233,7 +244,9 @@ int write (int fd, const void *buffer, unsigned size) { //Already done in file.c
 // TODO: Calling Exit won't work here, requires two arguments, see syscall.c -> exit()
 	// Alternatively, you could add the second arg required in the parameter list for write
 	// but we may not want to do that, if this error can be managed from the calling function
-/*	
+
+
+	/*
 	// Why are we doing this?
 	if (buffer >= PHYS_BASE) { //Complain about the attemplt to write to the kernel
 		exit(-1); //By killing the process
