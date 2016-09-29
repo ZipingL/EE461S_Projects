@@ -156,11 +156,88 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+
+  //Found a possible way to do this!!
+  //Now first we need to understand that every parent process can have multiple children and we have to wait for all of those, yes?
+  //However, no process inherently keeps a count of its children
+  //But Linux does!! Inside /proc, there are directories for each and every process
+  //Now, we can just go through all those directories and compare the child_tid's PPID with a given parent ID to see if its a child
+  //If a process matches that pid, then this process is a child of that one! For multiple children, we can just build a linked list to iterate through
+  //Here's a rough implementation of what I mean: (It could also utterly suck. This is crazy inefficient after all)
+  //We'll also have to likely add the parent_ID as a parameter to pass in
+
+  char* procDirPath = "\proc\""; //This is the directory that the status for all processes are located in
+  uint16_t largestID = 0;
+  uint16_t processToOpen = 2;
+  uint16_t fileOpened = 1;
+  size_t size = 40;
+  char* ppidLine = NULL;
+  char* statusInfo = NULL;
+  char* status = NULL;
+  char* ppid = NULL;
+
+  struct child_list* head = thread_current()->child_list; //The head of the child list
+  struct child_list* iterator = head;
+
+  while (fileOpened) {
+    fileOpened = open(strcat(strcat(procDirPath, ++processToOpen), "status");
+	if (fileOpened = -1) { //If the process does not actually have a file in proc, it isn't a process that exists
+	  fileOpened = 0; //So the loop should not continue
+	  continue;
+	}
+	for (int i = 0; i < 6; i++) {
+		if (i == 1 && getline(&statusInfo, &size, &(strcat(strcat(procDirPath, processToOpen), "status") != -1) { //This is the line that contains the status of the the process file
+		
+		} //statusInfo has what we need thanks to getLine :P
+
+		if (i == 4 && getline(&ppidLine, &size, &(strcat(strcat(procDirPath, processToOpen), "status") != -1) { //This is the line that contains the status of the the process file
+		
+		} //ppidLine has what we need thanks to getLine :P
+	}
+
+	for (int j = 0; j < strlen(statusInfo); j++) {
+	  if (strcmp(statusInfo[j], "S") == 0 || strcmp(statusInfo[j], "R") == 0 || strcmp(statusInfo[j], "X") == 0 || strcmp(statusInfo[j], "x") == 0 || strcmp(statusInfo[j], "Z") == 0) {
+		status = statusInfo[j]; //Now store the status of the current process (if it's one that we care about)
+		//Status of S means stopped, R means running, X and x mean the process is dead, and Z means zombie
+	  }
+
+	for (int k = 0; k < strlen(ppidLine); k++) {
+	  if (strcmp(ppidLine[k], "1") == 0 || strcmp(ppidLine[k], "2") == 0 || strcmp(ppidLine[k], "3") == 0 || strcmp(ppidLine[k], "4") == 0 || strcmp(ppidLine[k], "5") == 0 ||
+		  strcmp(ppidLine[k], "0") == 0 || strcmp(ppidLine[k], "6") == 0 || strcmp(ppidLine[k], "7") == 0 || strcmp(ppidLine[k], "8") == 0 || strcmp(ppidLine[k], "9") == 0) { //Check for any possible digit, lol
+		ppid = strcat(ppid, ppidLine[k]); //Now store the pid of the current process (if it's one that we care about)
+	  }
+
+	if (thread_current()->tid == atoi(ppid)) { //If the child is part of the parent list
+	  if (iterator == NULL) {
+		struct child = malloc(struct child_list); //Create a new node for the child list
+		child->pid = child_tid;
+		child->ppid = parent_ID;
+	  	child->status = status;
+	  	child->next = NULL; //Assign the linked list values appropriately
+	 	break; //Get out of here, this is the only node in the list after all
+	  }
+
+	  while (iterator->next != NULL) {
+		iterator = iterator->next;
+	  } //Go through the entire list
+
+	  struct child = malloc(struct child_list); //Create a new node for the child list
+	  child->pid = child_tid;
+	  child->ppid = parent_ID;
+	  child->status = status;
+	  child->next = NULL; //Assign the linked list values appropriately
+	  iterator->next = child; //Link the actual list
+	  iterator = head; //Reset the pointer
+	}
+  } //At the end of this, the child list should be constructed
+
+
   bool wait = false;
   while(find_thread(child_tid) != NULL)
   {
     wait = true;
-  }
+  } //If you cannot find a child process running
+
 #ifdef PROJECT2_DEBUG
   printf("process_wait bool: %d\n", wait);
 #endif
