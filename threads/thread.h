@@ -98,6 +98,9 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+	  struct list fd_table;               /* A linked list to hold the thread's current files */
+   int fd_table_counter; /* Counts how many fd entries have been added
+                            For determining fd values to assign */
 #endif
 
     /* Owned by thread.c. */
