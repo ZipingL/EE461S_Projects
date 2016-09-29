@@ -109,7 +109,7 @@ struct thread
 
 struct child_list {
 	tid_t pid;
-	pid_t ppid;
+	tid_t ppid;
 	char status;
 	struct child_list* next;
 };
