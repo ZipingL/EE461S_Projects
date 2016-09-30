@@ -165,7 +165,7 @@ process_wait (tid_t child_tid UNUSED)
   //If a process matches that pid, then this process is a child of that one! For multiple children, we can just build a linked list to iterate through
   //Here's a rough implementation of what I mean: (It could also utterly suck. This is crazy inefficient after all)
   //We'll also have to likely add the parent_ID as a parameter to pass in
-
+/*
   char* procDirPath = "\proc\""; //This is the directory that the status for all processes are located in
   uint16_t largestID = 0;
   uint16_t processToOpen = 2;
@@ -174,7 +174,7 @@ process_wait (tid_t child_tid UNUSED)
   char* ppidLine = NULL;
   char* statusInfo = NULL;
   char* status = NULL;
-  char* ppid = NULL;
+  char* ppid = NULL;*/
 
  // struct child_list* head = thread_current()->kid_list; //The head of the child list
   //struct child_list* iterator = head;
@@ -231,7 +231,7 @@ process_wait (tid_t child_tid UNUSED)
 	}
   } //At the end of this, the child list should be constructed
 */
-
+/*
   struct thread* current_thread = thread_current();
   struct list_elem* e = find_child_element(current_thread, child_tid);
   if(e == NULL) return -1; // return false if fd not found
@@ -240,13 +240,13 @@ process_wait (tid_t child_tid UNUSED)
   while(child_element->status != PROCESS_DONE)
   {
 
-  }
+  }*/
 
   //TODO: Remove child from childlist
 
-  return child_element->exit_status;
+ // return child_element->exit_status;
 
-/* ziping's bullshit wait
+/* ziping's bullshit wait*/
   bool wait = false;
   while(find_thread(child_tid) != NULL)
   {
@@ -260,7 +260,7 @@ process_wait (tid_t child_tid UNUSED)
     return 1; //TODO: Return child exit status
   else
     return -1;
-    */
+    
 }
 
 /* Free the current process's resources. */
