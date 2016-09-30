@@ -90,7 +90,7 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-	struct child_list;					/* Every thread has its own list of children */
+	struct child_list children;			/* Every thread has its own list of children */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
@@ -109,8 +109,7 @@ struct thread
 
 struct child_list {
 	tid_t pid;
-	tid_t ppid;
-	char status;
+	typedef enum {RUNNING, STOPPED} status; //The status of the child as an enum
 	struct child_list* next;
 };
 

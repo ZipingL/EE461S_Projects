@@ -176,11 +176,11 @@ process_wait (tid_t child_tid UNUSED)
   char* status = NULL;
   char* ppid = NULL;
 
-  struct child_list* head = thread_current()->child_list; //The head of the child list
-  struct child_list* iterator = head;
+ // struct child_list* head = thread_current()->kid_list; //The head of the child list
+  //struct child_list* iterator = head;
 
-  while (fileOpened) {
-    fileOpened = open(strcat(strcat(procDirPath, ++processToOpen), "status");
+  /* while (fileOpened) {
+    fileOpened = open(strcat(strcat(procDirPath, ++processToOpen), "status"));
 	if (fileOpened = -1) { //If the process does not actually have a file in proc, it isn't a process that exists
 	  fileOpened = 0; //So the loop should not continue
 	  continue;
@@ -230,7 +230,7 @@ process_wait (tid_t child_tid UNUSED)
 	  iterator = head; //Reset the pointer
 	}
   } //At the end of this, the child list should be constructed
-
+*/
 
   bool wait = false;
   while(find_thread(child_tid) != NULL)

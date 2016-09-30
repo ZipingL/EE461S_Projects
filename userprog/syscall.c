@@ -35,7 +35,6 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 	if(get_user(f->esp) == -1)
 		exit(-1, f);
 
-
 	//Assume that the esp pointer goes to the top of the stack (looks at return address)
 	uint32_t system_call_number =* (uint32_t**)(f->esp+0); //Create a pointer to the top of the stack (looks at argv[0])
 	uint32_t* stack_ptr =  (uint32_t*)(f->esp+0); // Two pointers with same address, but using different names
@@ -43,6 +42,18 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 	char* name = NULL;
 	uint32_t file_size = 0;
 	int fd = -1;
+
+	if (pid_t == 0) { //The process id is 0 if the process is a child
+		struct child_list *list = struct child_list; //Point to the existing list of children
+		while (list->next != NULL) { //Iterate through the list
+			list = list->next;
+		}
+		struct child_list *newChild = malloc(struct child_list);
+		list->next = newChild; //Link the list
+		newChild->pid = find_thread(pid_t)->tid; //Get the thread id of the current process
+		newChild->status = RUNNING; //Since you know that the process is running
+		newChild->next = NULL;
+	}
 
 	switch(system_call_number) { //This gives us the command that needs to be executed
 		case SYS_CREATE: //A pre-defined constant that refers to a "create" call
