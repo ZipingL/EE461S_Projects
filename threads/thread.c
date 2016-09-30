@@ -207,6 +207,12 @@ thread_create (const char *name, int priority,
   list_init(&t->fd_table);
   t->fd_table_counter = 2;
 
+  /* Initialize data in thread, specifically child lists */
+  list_init(&t->child_list);
+
+
+      
+
   /* Add to run queue. */
   thread_unblock (t);
 

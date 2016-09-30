@@ -86,7 +86,7 @@ process_execute (const char *file_name)
     palloc_free_page (fn_copy); 
   else {
 
-      /* Initialize data in thread */
+
 
 
   }
@@ -232,6 +232,21 @@ process_wait (tid_t child_tid UNUSED)
   } //At the end of this, the child list should be constructed
 */
 
+  struct thread* current_thread = thread_current();
+  struct list_elem* e = find_child_element(current_thread, child_tid);
+  if(e == NULL) return -1; // return false if fd not found
+  struct  child_list_elem *child_element = list_entry (e, struct child_list_elem, elem_child);
+
+  while(child_element->status != PROCESS_DONE)
+  {
+
+  }
+
+  //TODO: Remove child from childlist
+
+  return child_element->exit_status;
+
+/* ziping's bullshit wait
   bool wait = false;
   while(find_thread(child_tid) != NULL)
   {
@@ -245,6 +260,7 @@ process_wait (tid_t child_tid UNUSED)
     return 1; //TODO: Return child exit status
   else
     return -1;
+    */
 }
 
 /* Free the current process's resources. */

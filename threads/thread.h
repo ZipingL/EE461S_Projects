@@ -85,18 +85,19 @@ struct thread
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
-	char* fdtable[300];					/* A table to hold the thread's current files */
-    char name[16];                      /* Name (for debugging purposes). */
+    char name[40];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-	struct child_list children;			/* Every thread has its own list of children */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
+    // look in process.h for these declartions
+    //struct child_list_elem * child_data;
+    struct list child_list;     /* Every thread has its own list of children */
     uint32_t *pagedir;                  /* Page directory. */
 	  struct list fd_table;               /* A linked list to hold the thread's current files */
    int fd_table_counter; /* Counts how many fd entries have been added
@@ -107,11 +108,8 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
   };
 
-struct child_list {
-	tid_t pid;
-	typedef enum {RUNNING, STOPPED} status; //The status of the child as an enum
-	struct child_list* next;
-};
+
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

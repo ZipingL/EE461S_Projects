@@ -8,12 +8,14 @@
 #include "userprog/process.h"
 #include "filesys/filesys.h"
 
-typedef int pid_t;
+
+
+bool add_child_to_list(struct thread* parent_thread, tid_t pid);
 
 static int
 get_user (const uint8_t *uaddr);
 static void syscall_handler (struct intr_frame *);
-struct list_element* find_fd_element(int fd, struct thread* current_thread);
+struct list_elem* find_fd_element(int fd, struct thread* current_thread);
 bool create (const char *file, unsigned initial_size);
 int open (const char *file);
 
@@ -42,7 +44,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 	char* name = NULL;
 	uint32_t file_size = 0;
 	int fd = -1;
-
+/*
 	if (pid_t == 0) { //The process id is 0 if the process is a child
 		struct child_list *list = struct child_list; //Point to the existing list of children
 		while (list->next != NULL) { //Iterate through the list
@@ -53,7 +55,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 		newChild->pid = find_thread(pid_t)->tid; //Get the thread id of the current process
 		newChild->status = RUNNING; //Since you know that the process is running
 		newChild->next = NULL;
-	}
+	}*/
 
 	switch(system_call_number) { //This gives us the command that needs to be executed
 		case SYS_CREATE: //A pre-defined constant that refers to a "create" call
@@ -125,6 +127,13 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			exit(fd, f);
 			break;
 	      }
+
+	    case SYS_EXEC:
+	    {
+	    	name = *(stack_ptr+1);
+	    	f->eax = exec(name);
+	    }
+
 		default:
 		{
 			#ifdef PROJECT2_DEBUG
@@ -135,6 +144,21 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 		}
 
 }
+
+
+tid_t exec(const char* name)
+{
+	tid_t pid = process_execute(name);
+	struct thread* t = thread_current();
+	bool sucess = true;
+	// Using tid_t for child id for now, may need to change
+	bool success = add_child_to_list(t, pid);
+	if(sucess)
+		return pid;
+	else
+		return -1;
+}
+
 /* Used by syscall_filesize*/
 int filesize_get(int fd)
 {
@@ -179,8 +203,8 @@ void exit (int status, struct intr_frame *f) {
 
     Implementing this system call requires considerably more work than any of the rest. */
 
-int wait (pid_t pid) {
-
+int wait (tid_t pid) {
+	return process_wait(pid);
 }
 
 /* Creates a new file called file initially initial_size bytes in size. Returns true if successful, false otherwise. Creating a new file does not open it: opening the new file is a separate operation which would require a open system call. */
@@ -308,7 +332,7 @@ bool close (int fd) {
 // 			You can thus then use this returned type to remove element or
 //          Edit the contents of the actual element
 // You can view an example of these two uses in void close function above
-struct list_element* find_fd_element(int fd, struct thread* current_thread)
+struct list_elem* find_fd_element(int fd, struct thread* current_thread)
 {
 	    struct list_elem *e;
       	// search through the fd_table for the matching fd 
@@ -325,6 +349,31 @@ struct list_element* find_fd_element(int fd, struct thread* current_thread)
         return NULL;
 }
 
+struct list_elem* find_child_element(int fd, struct thread* current_thread)
+{
+	    struct list_elem *e;
+      	// search through the fd_table for the matching fd 
+		for (e = list_begin (&current_thread->child_list); e != list_end (&current_thread->child_list);
+           e = list_next (e))
+        {
+          struct  child_list_elem *child_element = list_entry (e, struct child_list_elem, elem_child);
+          if(child_element->pid == fd)
+          {
+          	return e;
+          }
+        }
+
+        return NULL;
+}
+
+
+// Find the element in the linkedlist coressponding to the given pid
+// Uses: Returns the list_element* type
+// 			You can thus then use this returned type to remove element or
+//          Edit the contents of the actual element
+
+
+// TODO: Should check if file is already opened/added
 int add_file_to_fd_table(struct thread* current_thread, struct file* fp)
 {
 		int return_fd = -1;
@@ -336,6 +385,13 @@ int add_file_to_fd_table(struct thread* current_thread, struct file* fp)
 		list_push_back(&current_thread->fd_table, &fd_element->elem_fd);
 		current_thread->fd_table_counter++; // increment counter, so we have a new fd to use for the next file
 		return return_fd;
+}
+// TODO: Should check if child is already added 
+bool add_child_to_list(struct thread* parent_thread, tid_t pid)
+{
+		struct child_list_elem* child_element = malloc(sizeof(struct child_list_elem));
+		list_push_back(&parent_thread->child_list, &child_element->elem_child);
+		return true;
 }
 
 
