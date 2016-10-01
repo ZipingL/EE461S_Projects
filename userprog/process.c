@@ -293,12 +293,28 @@ void
 process_exit (int exit_status)
 {
   struct thread *cur = thread_current ();
-  // Do not free child_data
+
+  // No need to report the exit status if the parent is dead,
+  // when the parent dies, it sets the child_data pointer in all it's children's struct to NULL
+  // child_data is a pointer in a child's thread struct, that let's the child acesss its corresponding child_list element
+  // in its parent's child_list
+  if(cur->child_data != NULL)
+  {
   cur->child_data->status = PROCESS_DONE;
   cur->child_data->exit_status = exit_status;
+  }
   sema_up(cur->child_data->sema);
   uint32_t *pd;
 
+  // Go through the child lists and free the data
+     while (!list_empty (&cur->child_list))
+     {
+       struct list_elem *e = list_pop_front (&cur->child_list);
+       struct  child_list_elem *child_element = list_entry (e, struct child_list_elem, elem_child);
+       *child_element->inception = NULL; // Tells any living children that the parent has died, so need to to report exit status to parent, see process_exit()
+       free(child_element);
+
+     }
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

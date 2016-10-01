@@ -148,7 +148,7 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* Check if we are accessing a page (esp) that doesn't exist */
+  /* Check if we are accessing a page (due to bad esp) that doesn't exist */
   if(not_present && !write)
     exit(-1);
 

@@ -38,6 +38,9 @@ struct child_list_elem {
 	enum child_status_t status; //The status of the child as an enum, no need for a zombie state
 	struct semaphore* sema;
 	int exit_status ;
+	struct child_list_elem** inception; // A pointer to the pointer of the child_data in the child's thread struct
+										// Let's us access child_data pointer without actually having to
+										// find the child thread, saves some time.
 };
 
 

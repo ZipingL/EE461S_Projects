@@ -34,13 +34,8 @@ static void
 syscall_handler (struct intr_frame *f) //UNUSED) 
 {
 
-	  int *param = f->esp, ret;
 
-  if ( !is_user_vaddr(param) )
-    exit (-1,f);
 
-  if (!( is_user_vaddr (param + 1) && is_user_vaddr (param + 2) && is_user_vaddr (param + 3)))
-    exit (-1,f);
 
 	// check for valid esp pointer (esp < PHYS_BASE)
 	if( !is_user_vaddr( f->esp))
@@ -59,6 +54,10 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 	//Assume that the esp pointer goes to the top of the stack (looks at return address)
 	uint32_t system_call_number = * (uint32_t**)(f->esp+0); //Create a pointer to the top of the stack (looks at argv[0])
 	uint32_t* stack_ptr =  (uint32_t*)(f->esp+0); // Two pointers with same address, but using different names
+
+	// Check for valid arg pointers 
+  	if (!( is_user_vaddr (stack_ptr + 1) && is_user_vaddr (stack_ptr + 2) && is_user_vaddr (stack_ptr + 3)))
+    	exit (-1,f); 
 	// to avoid confusion in usage
 	char* name = NULL;
 	uint32_t file_size = 0;
@@ -112,25 +111,40 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 
 			fd = *(stack_ptr+1);
 			void* buffer = *(stack_ptr+2);
-			//Check for valid buffer
+			// checks for buffer < PHYS_BASE
+			if( !is_user_vaddr(buffer))
+				exit(-1, f);
+			//Check for valid buffer read access
 			if(get_user(buffer) == -1)
 				exit(-1, f);
 
 
 			file_size = *(stack_ptr+3);
-			f->eax = read(fd, buffer, file_size);
+			int size_read = read(fd, buffer, file_size);
+			if(size_read == -1)
+				exit(-1, f);
+			else{
+				f->eax = size_read;
+			}
 			break;
 		}
 		case SYS_WRITE:
 		{
 			fd = *(stack_ptr+1);
 			void* buffer = *(stack_ptr+2);
-			//Check for valid buffer
+			// checks for buffer < PHYS_BASE
+			if( !is_user_vaddr( f->esp))
+				exit(-1, f);
+			//Check for valid buffer read access
 			if(get_user(buffer) == -1)
 					exit(-1, f);
 			file_size = *(stack_ptr+3);
 
-			f->eax = write(fd, buffer, file_size);
+			int size_write = write(fd, buffer, file_size);
+			if(size_write == -1)
+				exit(-1, f);
+			else
+				f->eax = size_write;
 
 			break;
 		}
@@ -145,6 +159,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 		case SYS_EXIT:
 	      {
 			fd = *(stack_ptr+1);
+			f->eax = fd;
 			exit(fd, f);
 			break;
 	      }
@@ -205,8 +220,8 @@ void halt (void) {
 
 void exit (int status, struct intr_frame *f) {
 
-
-	f->eax = status; //Save the status that was returned by the existing process to the stack
+	if(f!=NULL)
+		f->eax = status; //Save the status that was returned by the existing process to the stack
 	struct thread* t = thread_current();
 	printf ("%s: exit(%d)\n", t->name, status);
 
@@ -284,6 +299,8 @@ int read (int fd, void *buffer, unsigned size)
 	{
 		struct thread* t = thread_current();
 		struct list_elem* e = find_fd_element(fd, t);
+		if(e == NULL) // if no file found with given fd, return error
+			return -1;
 		struct fd_list_element *fd_element = list_entry(e, struct fd_list_element, elem_fd);
 		return file_read (fd_element->fp, buffer, size) ;
 	}
@@ -321,6 +338,8 @@ int write (int fd, const void *buffer, unsigned size) { //Already done in file.c
 	}
 	else if (fd != 0 && fd !=1) {
 		struct list_elem* e = find_fd_element(fd, current_thread);
+		if(e == NULL)
+			return -1; // return error if file not found
 		struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
 		return_size = file_write (fd_element->fp, buffer, size) ;
 	}
@@ -424,6 +443,7 @@ struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pi
 		// TODO: This may cause concurrency issues by doing it this way, but we will see....
 		struct thread* child_thread = find_thread(pid);
 		child_thread->child_data = child_element;
+		child_element->inception = &child_thread->child_data;
 		list_push_back(&parent_thread->child_list, &child_element->elem_child);
 		return child_element;
 }
