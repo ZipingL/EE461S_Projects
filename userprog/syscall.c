@@ -93,7 +93,10 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			if (name == NULL || *name == NULL) { //Check for a non-existant file of course
 				exit(-1, f);
 			}
-			f->eax = open(name); //Going to refer from eax from now on as the "status" register
+			fd = open(name); //Going to refer from eax from now on as the "status" register
+			//if(fd == -1)
+			//	exit(-1, f);
+			f->eax = fd;
 			break;
 		}
 		case SYS_CLOSE:
@@ -103,7 +106,10 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 				exit(-1, f); //If the pointer or file name is empty, then return an error code
 			}
 			file_size = *(stack_ptr+2);
-			f->eax = close(fd); //The only line different from SYS_OPEN
+			fd = close(fd); //The only line different from SYS_OPEN
+			if(fd == false)
+				exit(-1, f);
+			f->eax = fd;
 			break;
 		}
 		case SYS_READ:
@@ -225,6 +231,18 @@ void exit (int status, struct intr_frame *f) {
 	struct thread* t = thread_current();
 	printf ("%s: exit(%d)\n", t->name, status);
 
+	struct list_elem * e = NULL;
+	/*close all open files, but do not free the actual element in the list, we do that in process_exit()*/
+	for (e = list_begin (&t->fd_table); e != list_end (&t->fd_table);
+           e = list_next (e))
+        {
+          	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
+
+          
+          	file_close(fd_element->fp); // this call frees fp
+          	fd_element->fp = NULL;
+          
+        }
 
 	thread_exit_process(status); //A function in thread.h that terminates and removes from the list of threads the current thread t. t's status also becomes THREAD_DYING
 }
@@ -318,19 +336,6 @@ int write (int fd, const void *buffer, unsigned size) { //Already done in file.c
 	struct file* fp = NULL;
 	int return_size = -1;
 
-// TODO: Calling Exit won't work here, requires two arguments, see syscall.c -> exit()
-	// Alternatively, you could add the second arg required in the parameter list for write
-	// but we may not want to do that, if this error can be managed from the calling function
-
-
-	/*
-	// Why are we doing this?
-	if (buffer >= PHYS_BASE) { //Complain about the attemplt to write to the kernel
-		exit(-1); //By killing the process
-	}
-	if (fd == 0) { //Complain about the attempt to write to STDIN
-		exit(-1); //Again, the punishment is death
-	} */
 	if (fd == 1) // 
 	{	
 		putbuf(buffer, size);
@@ -364,12 +369,15 @@ bool close (int fd) {
 	struct list_elem* e = find_fd_element(fd, current_thread);
 	if(e == NULL) return false; // return false if fd not found
 	struct list_elem*  return_e = list_remove (e);
+
 	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
+
+	file_close(fd_element->fp);
 	free(fd_element); // Free the element we just removed, please also see open()
 	return true;
-
-
 }
+
+
 
 // Find the element in the linkedlist coressponding to the given fd
 // Uses: Returns the list_element* type
@@ -393,6 +401,10 @@ struct list_elem* find_fd_element(int fd, struct thread* current_thread)
         return NULL;
 }
 
+// Find the element in the linkedlist coressponding to the given tid_t pid
+// Uses: Returns the list_element* type
+// 			You can thus then use this returned type to remove element or
+//          Edit the contents of the actual element
 struct list_elem* find_child_element(struct thread* current_thread, tid_t pid)
 {
 	    struct list_elem *e;
@@ -410,11 +422,6 @@ struct list_elem* find_child_element(struct thread* current_thread, tid_t pid)
         return NULL;
 }
 
-
-// Find the element in the linkedlist coressponding to the given pid
-// Uses: Returns the list_element* type
-// 			You can thus then use this returned type to remove element or
-//          Edit the contents of the actual element
 
 
 // TODO: Should check if file is already opened/added
@@ -438,6 +445,7 @@ struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pi
 		child_element->pid = pid;
 		child_element->parent_pid = parent_thread->tid;
 		child_element->status = PROCESS_RUNNING;
+		child_element->sema = NULL; // set only in process_wait by the parent, used for waiting
 		/* also give the child thread struct itself a ptr to the child_element
 		   so that the child can update its status/ and exit status and the parent will see */
 		// TODO: This may cause concurrency issues by doing it this way, but we will see....

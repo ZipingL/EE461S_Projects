@@ -147,98 +147,21 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 
-      // TODO: This function is not done, this is not the correct way 
-   // it's just a hack that barely works, need to implement
-   // parent and child lists
-   // A correct process wait involves looking at the current thread's
-   // child_list, finding the child from the child_tid, and
-   // then wait on it.
-   // Right now, we are just looking at a list of all threads
-   // and waiting on that, so we have no way of knowing whether or not
-   // the child_tid is actually a child of the thread,
-   // and we have no way of waiting for the child_tid's children too.
-   // We should not be looking at threads, we need to move up an abstraction
-   // into process, since using threads to check a process's status
-   // can cause issues, for example, we are failing a few tests
-   // I think due to the this.
-int
+/* Ziping: How this function works:
+   it firsts find the child from the child_list
+   it then does a sema_down, this basically means 
+   its going to wait until some other function or code
+   does a sema_up on the same semaphore: child_element->sema
+   the child has access to the child_element through its
+   thread struct child_data member, which points to it (see syscall.c add_child...())
+   thus the child will do a sema_up when 
+   it finishes exiting (see process_exit)
+   this would thus give back control to the parent who called sema_down
+   the parent then finishes by removing the child from the child_list
+   if you are wondering about zombies, see process_exit
+   */
 process_wait (tid_t child_tid UNUSED) 
 {
-
-  //Found a possible way to do this!!
-  //Now first we need to understand that every parent process can have multiple children and we have to wait for all of those, yes?
-  //However, no process inherently keeps a count of its children
-  //But Linux does!! Inside /proc, there are directories for each and every process
-  //Now, we can just go through all those directories and compare the child_tid's PPID with a given parent ID to see if its a child
-  //If a process matches that pid, then this process is a child of that one! For multiple children, we can just build a linked list to iterate through
-  //Here's a rough implementation of what I mean: (It could also utterly suck. This is crazy inefficient after all)
-  //We'll also have to likely add the parent_ID as a parameter to pass in
-/*
-  char* procDirPath = "\proc\""; //This is the directory that the status for all processes are located in
-  uint16_t largestID = 0;
-  uint16_t processToOpen = 2;
-  uint16_t fileOpened = 1;
-  size_t size = 40;
-  char* ppidLine = NULL;
-  char* statusInfo = NULL;
-  char* status = NULL;
-  char* ppid = NULL;*/
-
- // struct child_list* head = thread_current()->kid_list; //The head of the child list
-  //struct child_list* iterator = head;
-
-  /* while (fileOpened) {
-    fileOpened = open(strcat(strcat(procDirPath, ++processToOpen), "status"));
-	if (fileOpened = -1) { //If the process does not actually have a file in proc, it isn't a process that exists
-	  fileOpened = 0; //So the loop should not continue
-	  continue;
-	}
-	for (int i = 0; i < 6; i++) {
-		if (i == 1 && getline(&statusInfo, &size, &(strcat(strcat(procDirPath, processToOpen), "status") != -1) { //This is the line that contains the status of the the process file
-		
-		} //statusInfo has what we need thanks to getLine :P
-
-		if (i == 4 && getline(&ppidLine, &size, &(strcat(strcat(procDirPath, processToOpen), "status") != -1) { //This is the line that contains the status of the the process file
-		
-		} //ppidLine has what we need thanks to getLine :P
-	}
-
-	for (int j = 0; j < strlen(statusInfo); j++) {
-	  if (strcmp(statusInfo[j], "S") == 0 || strcmp(statusInfo[j], "R") == 0 || strcmp(statusInfo[j], "X") == 0 || strcmp(statusInfo[j], "x") == 0 || strcmp(statusInfo[j], "Z") == 0) {
-		status = statusInfo[j]; //Now store the status of the current process (if it's one that we care about)
-		//Status of S means stopped, R means running, X and x mean the process is dead, and Z means zombie
-	  }
-
-	for (int k = 0; k < strlen(ppidLine); k++) {
-	  if (strcmp(ppidLine[k], "1") == 0 || strcmp(ppidLine[k], "2") == 0 || strcmp(ppidLine[k], "3") == 0 || strcmp(ppidLine[k], "4") == 0 || strcmp(ppidLine[k], "5") == 0 ||
-		  strcmp(ppidLine[k], "0") == 0 || strcmp(ppidLine[k], "6") == 0 || strcmp(ppidLine[k], "7") == 0 || strcmp(ppidLine[k], "8") == 0 || strcmp(ppidLine[k], "9") == 0) { //Check for any possible digit, lol
-		ppid = strcat(ppid, ppidLine[k]); //Now store the pid of the current process (if it's one that we care about)
-	  }
-
-	if (thread_current()->tid == atoi(ppid)) { //If the child is part of the parent list
-	  if (iterator == NULL) {
-		struct child = malloc(struct child_list); //Create a new node for the child list
-		child->pid = child_tid;
-		child->ppid = parent_ID;
-	  	child->status = status;
-	  	child->next = NULL; //Assign the linked list values appropriately
-	 	break; //Get out of here, this is the only node in the list after all
-	  }
-
-	  while (iterator->next != NULL) {
-		iterator = iterator->next;
-	  } //Go through the entire list
-
-	  struct child = malloc(struct child_list); //Create a new node for the child list
-	  child->pid = child_tid;
-	  child->ppid = parent_ID;
-	  child->status = status;
-	  child->next = NULL; //Assign the linked list values appropriately
-	  iterator->next = child; //Link the actual list
-	  iterator = head; //Reset the pointer
-	}
-  } //At the end of this, the child list should be constructed
-*/
 
   struct thread* current_thread = thread_current();
   struct list_elem* e = find_child_element(current_thread, child_tid);
@@ -261,34 +184,11 @@ process_wait (tid_t child_tid UNUSED)
   // Free the child memory allocation
   free(child_element);
 
-  //TODO: Remove child from childlist
-
- // return child_element->exit_status;
-
-/* ziping's bullshit wait*/
-  /*
-  bool wait = false;
-  while(find_thread(child_tid)
-
-   != NULL)
-  {
-    wait = true;
-  } //If you cannot find a child process running
-
-#ifdef PROJECT2_DEBUG
-  printf("process_wait bool: %d\n", wait);
-#endif
-  if(wait)
-    return 1; //TODO: Return child exit status
-  else
-    return -1;*/
-
-    return exit_status;
+  return exit_status;
     
 }
 
-/* Free the current process's resources. */
-/*TODO*/
+/* Free the current process's resources. Then exits the process officially*/
 void
 process_exit (int exit_status)
 {
@@ -300,11 +200,14 @@ process_exit (int exit_status)
   // in its parent's child_list
   if(cur->child_data != NULL)
   {
-  cur->child_data->status = PROCESS_DONE;
-  cur->child_data->exit_status = exit_status;
+    cur->child_data->status = PROCESS_DONE;
+    cur->child_data->exit_status = exit_status;
   }
-  sema_up(cur->child_data->sema);
+  struct semaphore * child_sema = cur->child_data->sema;
   uint32_t *pd;
+
+   //if(child_sema != NULL))
+  sema_up(child_sema); // notify waiting parent that the child is done
 
   // Go through the child lists and free the data
      while (!list_empty (&cur->child_list))
@@ -315,6 +218,14 @@ process_exit (int exit_status)
        free(child_element);
 
      }
+  // Go through the fd_table list and free the elements, all files have been closed by the calling function ( syscall.c exit() ) already
+     while(!list_empty(&cur->fd_table))
+     {
+       struct list_elem *e = list_pop_front (&cur->fd_table);
+       struct  fd_list_element *element = list_entry (e, struct fd_list_element, elem_fd);
+       free(element);
+     }
+     
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
@@ -332,7 +243,7 @@ process_exit (int exit_status)
       pagedir_destroy (pd);
     }
 
-
+  
 }
 
 /* Sets up the CPU for running user code in the current

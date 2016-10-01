@@ -13,6 +13,8 @@ This is the [User Programs][userprog] project in Pintos. To get started:
 1. Submitting your Project:
   2. [Create a **pull request**][pull-request] on the original repository to turn in the assignment.
 
+- Tests Fail/Pass Status (Update this every time you push with what you see in make check,
+please never push if you cause tests to fail that weren't failing already)
 
 <!-- Links -->
 [userprog]: https://web.stanford.edu/class/cs140/projects/pintos/pintos_3.html#SEC32
