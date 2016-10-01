@@ -137,11 +137,18 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 	    	break;
 	    }
 
+	    case SYS_WAIT:
+	    {
+	    	fd = *(stack_ptr + 1);
+	    	f->eax = wait(fd);
+	    	break;
+	    }
+
 		default:
 		{
-			#ifdef PROJECT2_DEBUG
-			printf("SYSCALL function not found, number:%d\n", system_call_number);
-			#endif
+			//#ifdef PROJECT2_DEBUG
+			printf("DID NOT IMPLEMENT THIS SYSCALL ERROR, number:%d\n", system_call_number);
+			//#endif
 			break;
 		}
 		}
@@ -188,9 +195,7 @@ void exit (int status, struct intr_frame *f) {
 	thread_exit_process(status); //A function in thread.h that terminates and removes from the list of threads the current thread t. t's status also becomes THREAD_DYING
 }
 
-/* Runs the executable whose name is given in cmd_line, passing any given arguments, and returns the new process's program id (pid). Must return pid -1, which otherwise should not be a valid pid, if the program cannot load or run for any reason. Thus, the parent process cannot return from the exec until it knows whether the child process successfully loaded its executable. You must use appropriate synchronization to ensure this. */
 
-//id_t exec (const char *cmd_line)
 
  /* Waits for a child process pid and retrieves the child's exit status.
 
@@ -395,7 +400,6 @@ struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pi
 		child_element->pid = pid;
 		child_element->parent_pid = parent_thread->tid;
 		child_element->status = PROCESS_RUNNING;
-		sema_init(&child_element->sema, 0); 
 		/* also give the child thread struct itself a ptr to the child_element
 		   so that the child can update its status/ and exit status and the parent will see */
 		// TODO: This may cause concurrency issues by doing it this way, but we will see....

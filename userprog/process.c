@@ -247,12 +247,15 @@ process_wait (tid_t child_tid UNUSED)
   //printf("child_list wait addr: %p\n", child_element);
   /*while(child_element->status != PROCESS_DONE)
   {
+    printf("status: %d", child_element->status);
   }*/
-
+  sema_init(&child_element->sema, 0); 
   sema_down(&child_element->sema);
+
+  int exit_status = child_element->exit_status;
+
   // Remove done child
   list_remove(e);
-  int status = child_element->exit_status;
   // Free the child memory allocation
   free(child_element);
 
@@ -278,7 +281,7 @@ process_wait (tid_t child_tid UNUSED)
   else
     return -1;*/
 
-    return status;
+    return exit_status;
     
 }
 
