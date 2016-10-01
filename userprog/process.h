@@ -5,7 +5,7 @@
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
-void process_exit (void);
+void process_exit (int exit_status);
 void process_activate (void);
 
 // We need to access a void* pointer in two different ways
@@ -33,7 +33,9 @@ enum child_status_t {
 struct child_list_elem {
   	struct list_elem elem_child; // use the linked list data type proved by pintos in list.h/list.c
 	tid_t pid;
+	tid_t parent_pid;
 	enum child_status_t status; //The status of the child as an enum, no need for a zombie state
+	struct semaphore sema;
 	int exit_status ;
 };
 

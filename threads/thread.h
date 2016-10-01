@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -102,6 +103,8 @@ struct thread
 	  struct list fd_table;               /* A linked list to hold the thread's current files */
    int fd_table_counter; /* Counts how many fd entries have been added
                             For determining fd values to assign */
+
+   struct child_list_elem *child_data; //Child can update its status for parent to see
 #endif
 
     /* Owned by thread.c. */
@@ -132,7 +135,8 @@ struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
 
-void thread_exit (void) NO_RETURN;
+void thread_exit_process (int status) NO_RETURN;
+void thread_exit(void) NO_RETURN;
 void thread_yield (void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */

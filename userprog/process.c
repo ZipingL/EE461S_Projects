@@ -17,6 +17,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 #include "lib/kernel/list.h"
 
 static thread_func start_process NO_RETURN;
@@ -85,6 +86,13 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   else {
+
+    // Add created process to the current thread's child_list
+  struct thread* t = thread_current();
+  // Using tid_t for child id for now, may need to change
+  struct child_list_elem* success = add_child_to_list(t, tid);
+  if(success ==NULL)
+    return TID_ERROR;
 
 
 
@@ -231,24 +239,33 @@ process_wait (tid_t child_tid UNUSED)
 	}
   } //At the end of this, the child list should be constructed
 */
-/*
+
   struct thread* current_thread = thread_current();
   struct list_elem* e = find_child_element(current_thread, child_tid);
   if(e == NULL) return -1; // return false if fd not found
   struct  child_list_elem *child_element = list_entry (e, struct child_list_elem, elem_child);
-
-  while(child_element->status != PROCESS_DONE)
+  //printf("child_list wait addr: %p\n", child_element);
+  /*while(child_element->status != PROCESS_DONE)
   {
-
   }*/
+
+  sema_down(&child_element->sema);
+  // Remove done child
+  list_remove(e);
+  int status = child_element->exit_status;
+  // Free the child memory allocation
+  free(child_element);
 
   //TODO: Remove child from childlist
 
  // return child_element->exit_status;
 
 /* ziping's bullshit wait*/
+  /*
   bool wait = false;
-  while(find_thread(child_tid) != NULL)
+  while(find_thread(child_tid)
+
+   != NULL)
   {
     wait = true;
   } //If you cannot find a child process running
@@ -259,16 +276,22 @@ process_wait (tid_t child_tid UNUSED)
   if(wait)
     return 1; //TODO: Return child exit status
   else
-    return -1;
+    return -1;*/
+
+    return status;
     
 }
 
 /* Free the current process's resources. */
 /*TODO*/
 void
-process_exit (void)
+process_exit (int exit_status)
 {
   struct thread *cur = thread_current ();
+  // Do not free child_data
+  cur->child_data->status = PROCESS_DONE;
+  cur->child_data->exit_status = exit_status;
+  sema_up(&cur->child_data->sema);
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back
@@ -287,6 +310,8 @@ process_exit (void)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+
+
 }
 
 /* Sets up the CPU for running user code in the current
@@ -304,7 +329,6 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
-
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
 

@@ -101,6 +101,10 @@ thread_init (void)
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
   //Initialize the child list (what do I need to do here?)
+  list_init(&initial_thread->child_list);
+  //Initialize fd table for ?
+  list_init(&initial_thread->fd_table);
+  initial_thread->fd_table_counter = 2;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -201,7 +205,8 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /* Set up fd_table */
+
+    /* Set up fd_table */
   // see lib/kernel/list.h for how to use linked list pintos version
   // we must initialze the list first to use it:
   list_init(&t->fd_table);
@@ -209,8 +214,6 @@ thread_create (const char *name, int priority,
 
   /* Initialize data in thread, specifically child lists */
   list_init(&t->child_list);
-
-
       
 
   /* Add to run queue. */
@@ -293,12 +296,12 @@ thread_tid (void)
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
 void
-thread_exit (void) 
+thread_exit_process (int exit_status) 
 {
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  process_exit ();
+  process_exit (exit_status);
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -309,6 +312,11 @@ thread_exit (void)
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
+}
+
+void thread_exit(void)
+{
+  thread_exit_process(0);
 }
 
 /* Yields the CPU.  The current thread is not put to sleep and

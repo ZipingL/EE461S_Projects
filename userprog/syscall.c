@@ -10,7 +10,7 @@
 
 
 
-bool add_child_to_list(struct thread* parent_thread, tid_t pid);
+struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pid);
 
 static int
 get_user (const uint8_t *uaddr);
@@ -96,6 +96,8 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			//Check for valid buffer
 			if(get_user(buffer) == -1)
 				exit(-1, f);
+
+
 			file_size = *(stack_ptr+3);
 			f->eax = read(fd, buffer, file_size);
 			break;
@@ -132,6 +134,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 	    {
 	    	name = *(stack_ptr+1);
 	    	f->eax = exec(name);
+	    	break;
 	    }
 
 		default:
@@ -149,11 +152,8 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 tid_t exec(const char* name)
 {
 	tid_t pid = process_execute(name);
-	struct thread* t = thread_current();
-	bool sucess = true;
-	// Using tid_t for child id for now, may need to change
-	bool success = add_child_to_list(t, pid);
-	if(sucess)
+
+	if(pid != TID_ERROR)
 		return pid;
 	else
 		return -1;
@@ -183,8 +183,9 @@ void exit (int status, struct intr_frame *f) {
 	f->eax = status; //Save the status that was returned by the existing process to the stack
 	struct thread* t = thread_current();
 	printf ("%s: exit(%d)\n", t->name, status);
-	process_exit();
-	thread_exit(); //A function in thread.h that terminates and removes from the list of threads the current thread t. t's status also becomes THREAD_DYING
+
+
+	thread_exit_process(status); //A function in thread.h that terminates and removes from the list of threads the current thread t. t's status also becomes THREAD_DYING
 }
 
 /* Runs the executable whose name is given in cmd_line, passing any given arguments, and returns the new process's program id (pid). Must return pid -1, which otherwise should not be a valid pid, if the program cannot load or run for any reason. Thus, the parent process cannot return from the exec until it knows whether the child process successfully loaded its executable. You must use appropriate synchronization to ensure this. */
@@ -216,7 +217,7 @@ bool create (const char *file, unsigned initial_size) {
 }
 
 /* Deletes the file called file. Returns true if successful, false otherwise. A file may be removed regardless of whether it is open or closed, and removing an open file does not close it. See Removing an Open File, for details. */
-
+//TODO
 //bool remove (const char *file)
 
 /* Opens the file called file. Returns a nonnegative integer handle called a "file descriptor" (fd), or -1 if the file could not be opened.
@@ -349,7 +350,7 @@ struct list_elem* find_fd_element(int fd, struct thread* current_thread)
         return NULL;
 }
 
-struct list_elem* find_child_element(int fd, struct thread* current_thread)
+struct list_elem* find_child_element(struct thread* current_thread, tid_t pid)
 {
 	    struct list_elem *e;
       	// search through the fd_table for the matching fd 
@@ -357,7 +358,7 @@ struct list_elem* find_child_element(int fd, struct thread* current_thread)
            e = list_next (e))
         {
           struct  child_list_elem *child_element = list_entry (e, struct child_list_elem, elem_child);
-          if(child_element->pid == fd)
+          if(child_element->pid == pid)
           {
           	return e;
           }
@@ -387,11 +388,21 @@ int add_file_to_fd_table(struct thread* current_thread, struct file* fp)
 		return return_fd;
 }
 // TODO: Should check if child is already added 
-bool add_child_to_list(struct thread* parent_thread, tid_t pid)
+struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pid)
 {
+		/* create new child element to push to the parent's child list*/
 		struct child_list_elem* child_element = malloc(sizeof(struct child_list_elem));
+		child_element->pid = pid;
+		child_element->parent_pid = parent_thread->tid;
+		child_element->status = PROCESS_RUNNING;
+		sema_init(&child_element->sema, 0); 
+		/* also give the child thread struct itself a ptr to the child_element
+		   so that the child can update its status/ and exit status and the parent will see */
+		// TODO: This may cause concurrency issues by doing it this way, but we will see....
+		struct thread* child_thread = find_thread(pid);
+		child_thread->child_data = child_element;
 		list_push_back(&parent_thread->child_list, &child_element->elem_child);
-		return true;
+		return child_element;
 }
 
 
