@@ -93,10 +93,20 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			if (name == NULL) { //Check for a non-existant file of course
 				exit(-1, f);
 			}
+			else {
+				if(get_user(name) == -1) // check if pointer to name is actually valid
+					exit(-1, f);
+			}
+
+
 			fd = open(name); //Going to refer from eax from now on as the "status" register
 			//if(fd == -1)
 			//	exit(-1, f);
 			f->eax = fd;
+			break;
+		}
+		case SYS_SEEK:
+		{
 			break;
 		}
 		case SYS_CLOSE:
@@ -139,7 +149,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			fd = *(stack_ptr+1);
 			void* buffer = *(stack_ptr+2);
 			// checks for buffer < PHYS_BASE
-			if( !is_user_vaddr( f->esp))
+			if( !is_user_vaddr( buffer) )
 				exit(-1, f);
 			//Check for valid buffer read access
 			if(get_user(buffer) == -1)
@@ -295,6 +305,7 @@ int open (const char *file) {
 
 		return_fd = add_file_to_fd_table(current_thread, fp);
 	}
+	
 	return return_fd; // IF The file could not be assigned a new file descriptor, then return_fd == -1
 }
 

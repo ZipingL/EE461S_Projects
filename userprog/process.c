@@ -119,11 +119,12 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
+  
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
-    thread_exit ();
+      thread_exit ();
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -243,7 +244,7 @@ process_exit (int exit_status)
       pagedir_destroy (pd);
     }
 
-  
+
 }
 
 /* Sets up the CPU for running user code in the current

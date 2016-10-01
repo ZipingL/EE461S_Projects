@@ -4,6 +4,8 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -148,13 +150,32 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* Check if we are accessing a page (due to bad esp) that doesn't exist */
-  if(not_present && !write)
-    exit(-1);
+/*
+  /* Check if user are accessing a pointer (due to bad esp) that doesn't exist */
+  // kernel does it in syscall.c get_user, for checking for valid pointers
+  // user does it when its stupid
+ // if(not_present && !write && is_user_vaddr(fault_addr))
+   // exit(-1);
+
+/*
+  /* Check if the user was doing a bad jump e.g. trying to read/write from bad address kernel*/
+
+  /*
+  if(not_present)
+    exit(-1); */
+
+  exit(-1); // This is a hack, remove this if you are debugging a test! 
+
+  /* Check if the user was doing a bad read, e.g. trying to read from null ptr*/
+  //if(!write && user)
+ //   exit(-1);
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
+     // We won't delete this, since when we see this print we will know
+     // there is something we haven't added into this function
+     // that needs to be added
   printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
