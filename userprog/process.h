@@ -2,6 +2,7 @@
 #define USERPROG_PROCESS_H
 #include "threads/thread.h"
 #define MAX_ARGS_COUNT 100
+#define MAX_FILE_NAME_SIZE 20
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
@@ -35,7 +36,7 @@ struct child_list_elem {
 	tid_t pid;
 	tid_t parent_pid;
 	enum child_status_t status; //The status of the child as an enum, no need for a zombie state
-	struct semaphore sema;
+	struct semaphore* sema;
 	int exit_status ;
 };
 

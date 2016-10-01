@@ -249,8 +249,10 @@ process_wait (tid_t child_tid UNUSED)
   {
     printf("status: %d", child_element->status);
   }*/
-  sema_init(&child_element->sema, 0); 
-  sema_down(&child_element->sema);
+  struct semaphore sema;
+  child_element->sema = &sema;
+  sema_init(child_element->sema, 0); 
+  sema_down(child_element->sema);
 
   int exit_status = child_element->exit_status;
 
@@ -294,7 +296,7 @@ process_exit (int exit_status)
   // Do not free child_data
   cur->child_data->status = PROCESS_DONE;
   cur->child_data->exit_status = exit_status;
-  sema_up(&cur->child_data->sema);
+  sema_up(cur->child_data->sema);
   uint32_t *pd;
 
   /* Destroy the current process's page directory and switch back

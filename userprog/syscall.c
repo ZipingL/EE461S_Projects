@@ -33,12 +33,31 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f) //UNUSED) 
 {
-	//Check for valid esp
-	if(get_user(f->esp) == -1)
+
+	  int *param = f->esp, ret;
+
+  if ( !is_user_vaddr(param) )
+    exit (-1,f);
+
+  if (!( is_user_vaddr (param + 1) && is_user_vaddr (param + 2) && is_user_vaddr (param + 3)))
+    exit (-1,f);
+
+	// check for valid esp pointer (esp < PHYS_BASE)
+	if( !is_user_vaddr( f->esp))
+		exit(-1, f);
+
+	// Check if stack size is over the limit of 8 mb
+	// specifically to pass the test wait-kill
+	// see also : http://courses.cs.vt.edu/cs3204/spring2006/gback/pintos/doc/pintos_5.html#SEC101
+	//printf("%u", (uint32_t) PHYS_BASE - (uint32_t) f->esp);
+	//if(( (uint32_t) PHYS_BASE - (uint32_t) f->esp) > ( (uint32_t ) 3086692358))
+	//	exit(-1, f);
+	//Check for valid esp read access
+	if(get_user((char*) f->esp) == -1)
 		exit(-1, f);
 
 	//Assume that the esp pointer goes to the top of the stack (looks at return address)
-	uint32_t system_call_number =* (uint32_t**)(f->esp+0); //Create a pointer to the top of the stack (looks at argv[0])
+	uint32_t system_call_number = * (uint32_t**)(f->esp+0); //Create a pointer to the top of the stack (looks at argv[0])
 	uint32_t* stack_ptr =  (uint32_t*)(f->esp+0); // Two pointers with same address, but using different names
 	// to avoid confusion in usage
 	char* name = NULL;
