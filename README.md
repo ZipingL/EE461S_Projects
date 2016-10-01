@@ -12,7 +12,9 @@ This is the [User Programs][userprog] project in Pintos. To get started:
   2. [**Push**][ref-push]/sync the changes up to your fork on GitHub.
 1. Submitting your Project:
   2. [Create a **pull request**][pull-request] on the original repository to turn in the assignment.
-*TEST STATUS
+
+
+#TEST STATUS
 pass tests/userprog/args-none
 pass tests/userprog/args-single
 pass tests/userprog/args-multiple
@@ -90,6 +92,10 @@ FAIL tests/filesys/base/syn-read
 FAIL tests/filesys/base/syn-remove
 FAIL tests/filesys/base/syn-write
 15 of 76 tests failed.
+
+
+
+
 <!-- Links -->
 [userprog]: https://web.stanford.edu/class/cs140/projects/pintos/pintos_3.html#SEC32
 [forking]: https://guides.github.com/activities/forking/
