@@ -79,7 +79,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 		case SYS_CREATE: //A pre-defined constant that refers to a "create" call
 		{
 			name = *(stack_ptr+1); //With this, we can load the name of the file
-			if (name == NULL || *name == NULL) {
+			if (name == NULL) {
 				exit(-1, f); //If the pointer or file name is empty, then return an error code
 			}
 			file_size = *(stack_ptr+2); //Now get the second arg: the size of the file
@@ -90,7 +90,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 		case SYS_OPEN: //A pre-defined constant that refers to an "open" call
 		{
 			name = *(stack_ptr+1); //This looks just to the first and only needed parameter, the file to open
-			if (name == NULL || *name == NULL) { //Check for a non-existant file of course
+			if (name == NULL) { //Check for a non-existant file of course
 				exit(-1, f);
 			}
 			fd = open(name); //Going to refer from eax from now on as the "status" register
