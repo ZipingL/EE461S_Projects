@@ -215,7 +215,6 @@ thread_create (const char *name, int priority,
   /* Initialize data in thread, specifically child lists */
   list_init(&t->child_list);
       
-
   /* Add to run queue. */
   thread_unblock (t);
 

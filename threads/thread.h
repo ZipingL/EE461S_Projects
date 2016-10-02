@@ -95,6 +95,8 @@ struct thread
     struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
+    //struct semaphore* load_sema;
+   // int load_status;
     /* Owned by userprog/process.c. */
     // look in process.h for these declartions
     //struct child_list_elem * child_data;

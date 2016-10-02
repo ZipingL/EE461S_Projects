@@ -67,6 +67,8 @@ process_execute (const char *file_name)
   char *fn_copy;
   tid_t tid;
 
+
+
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -81,24 +83,42 @@ process_execute (const char *file_name)
   char* argv[1];
   parse_command_string(file_name_no_args, argv, true);
 
+  /* check if the file is actually valid first, if not return -1*/
+  struct dir *dir = dir_open_root ();
+  struct inode *inode = NULL;
+  bool file_validation = false;
+  if (dir != NULL)
+    file_validation = dir_lookup (dir, argv[0], &inode);
+  dir_close (dir);
+
+  if(inode != NULL)
+  {
+    inode_close(inode);
+  } else if(file_validation == false) {
+    palloc_free_page(fn_copy);
+    return TID_ERROR;
+  }
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (argv[0], PRI_DEFAULT, start_process, fn_copy);
 
   if (tid == TID_ERROR)
+  {
     palloc_free_page (fn_copy); 
-  else {
-
+  }
+  else 
+  {
     // Add created process to the current thread's child_list
   struct thread* t = thread_current();
   // Using tid_t for child id for now, may need to change
   struct child_list_elem* success = add_child_to_list(t, tid);
-  if(success ==NULL)
-    return TID_ERROR;
-
-
-
-
+    if(success ==NULL)
+    {
+      palloc_free_page(fn_copy);
+      return TID_ERROR;
+    }
   }
+
   return tid;
 
 
@@ -125,8 +145,7 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
-      thread_exit ();
-
+      exit(-1);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -162,7 +181,7 @@ start_process (void *file_name_)
    the parent then finishes by removing the child from the child_list
    if you are wondering about zombies, see process_exit
    */
-process_wait (tid_t child_tid UNUSED) 
+int process_wait (tid_t child_tid UNUSED) 
 {
 
   struct thread* current_thread = thread_current();
@@ -175,6 +194,13 @@ process_wait (tid_t child_tid UNUSED)
     printf("status: %d", child_element->status);
   }*/
   struct semaphore sema;
+
+  // Check if this guy is already being waited on
+  if(child_element->sema != NULL)
+  {
+    return -1;
+  }
+
   child_element->sema = &sema;
   sema_init(child_element->sema, 0); 
   sema_down(child_element->sema);
