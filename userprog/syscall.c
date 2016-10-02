@@ -18,7 +18,8 @@ static void syscall_handler (struct intr_frame *);
 struct list_elem* find_fd_element(int fd, struct thread* current_thread);
 bool create (const char *file, unsigned initial_size);
 int open (const char *file);
-
+unsigned tell (int fd);
+bool seek(int fd, unsigned offset);
 bool close (int fd);
 
 void exit (int status, struct intr_frame *f);
@@ -107,6 +108,23 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 		}
 		case SYS_SEEK:
 		{
+			fd = *(stack_ptr + 1);
+			if(fd <= 0)
+			{
+				exit(-1, f);
+			}
+			file_size = *(stack_ptr + 2);
+			f->eax = seek(fd, file_size);
+			break;
+		}
+		case SYS_TELL:
+		{
+			fd = *(stack_ptr + 1);
+			if(fd <= 0)
+			{
+				exit(-1, f);
+			}
+			f->eax = tell(fd);
 			break;
 		}
 		case SYS_CLOSE:
@@ -165,10 +183,27 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			break;
 		}
 
+
 		case SYS_FILESIZE:
 		{
 			fd = *(stack_ptr + 1);
 			f->eax = filesize_get(fd);
+			break;
+		}
+
+		case SYS_REMOVE:
+		{
+			name = *(stack_ptr + 1);
+			if (name == NULL) { //Check for a non-existant file of course
+				exit(-1, f);
+			}
+			else {
+				if(get_user(name) == -1) // check if pointer to name is actually valid
+					exit(-1, f);
+			}
+
+			f->eax = filesys_remove(name);
+
 			break;
 		}
 
@@ -191,6 +226,12 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 	    {
 	    	fd = *(stack_ptr + 1);
 	    	f->eax = wait(fd);
+	    	break;
+	    }
+
+	    case SYS_HALT:
+	    {
+	    	halt();
 	    	break;
 	    }
 
@@ -285,7 +326,12 @@ bool create (const char *file, unsigned initial_size) {
 
 /* Deletes the file called file. Returns true if successful, false otherwise. A file may be removed regardless of whether it is open or closed, and removing an open file does not close it. See Removing an Open File, for details. */
 //TODO
-//bool remove (const char *file)
+//
+
+bool remove (const char *file)
+{
+
+}
 
 /* Opens the file called file. Returns a nonnegative integer handle called a "file descriptor" (fd), or -1 if the file could not be opened.
 
@@ -367,11 +413,27 @@ int write (int fd, const void *buffer, unsigned size) { //Already done in file.c
 
     A seek past the current end of a file is not an error. A later read obtains 0 bytes, indicating end of file. A later write extends the file, filling any unwritten gap with zeros. (However, in Pintos files have a fixed length until project 4 is complete, so writes past end of file will return an error.) These semantics are implemented in the file system and do not require any special effort in system call implementation. */
 
-//void seek (int fd, unsigned position)
+bool seek (int fd, unsigned position)
+{
+	struct thread* current_thread = thread_current();
+	struct list_elem* e = find_fd_element(fd, current_thread);
+	if(e == NULL) return false; //is this needed?
+	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
+	file_seek(fd_element->fp, position);
+	return true;
+
+}
 
 /* Returns the position of the next byte to be read or written in open file fd, expressed in bytes from the beginning of the file. */
 
-//unsigned tell (int fd)
+unsigned tell (int fd) {
+	struct thread* current_thread = thread_current();
+	struct list_elem* e = find_fd_element(fd, current_thread);
+	//if(e == NULL) return false; is this needed?
+	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
+	return file_seek(fd_element->fp);
+
+}
     
 /* Closes file descriptor fd. Exiting or terminating a process implicitly closes all its open file descriptors, as if by calling this function for each one. */
 
