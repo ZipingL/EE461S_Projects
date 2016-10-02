@@ -7,6 +7,7 @@
 #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
 #include "userprog/tss.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
@@ -119,7 +120,7 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
-  
+
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -206,6 +207,8 @@ process_exit (int exit_status)
   }
   struct semaphore * child_sema = cur->child_data->sema;
   uint32_t *pd;
+
+  file_close(cur->exec_fp);
 
    //if(child_sema != NULL))
   sema_up(child_sema); // notify waiting parent that the child is done
@@ -362,12 +365,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 
   /* Open executable file. */
+  lock_acquire(&read_write_lock);
   file = filesys_open (argv[0]);
+  lock_release(&read_write_lock);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", argv[0]);
       goto done; 
     }
+
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -455,7 +461,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+
+
+ if(!success)
   file_close (file);
+  else
+  {
+        file_deny_write(file);
+        struct thread* t = thread_current();
+        t->exec_fp = file;
+
+  }
   return success;
 }
 /* load() helpers. */

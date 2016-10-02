@@ -7,6 +7,7 @@
 #include "devices/shutdown.h"
 #include "userprog/process.h"
 #include "filesys/filesys.h"
+#include "threads/synch.h"
 
 
 
@@ -21,13 +22,14 @@ int open (const char *file);
 unsigned tell (int fd);
 bool seek(int fd, unsigned offset);
 bool close (int fd);
-
 void exit (int status, struct intr_frame *f);
 int write (int fd, const void *buffer, unsigned size);
+
 
 void
 syscall_init (void) 
 {
+  lock_init(&read_write_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -330,7 +332,7 @@ bool create (const char *file, unsigned initial_size) {
 
 bool remove (const char *file)
 {
-
+	return filesys_remove(file);
 }
 
 /* Opens the file called file. Returns a nonnegative integer handle called a "file descriptor" (fd), or -1 if the file could not be opened.
@@ -365,9 +367,16 @@ int read (int fd, void *buffer, unsigned size)
 {
 
 
+	int return_size = -1;
 	if(fd == 0)
 	{
-/*TODO, read from stdin*/
+		int i = 0;
+		for(i = 0; i < size; i++)
+		{
+			((char*) buffer) [i] = input_getc();
+		}
+		return_size = size;;
+
 	}
 
 	else if (fd != 1)
@@ -375,10 +384,22 @@ int read (int fd, void *buffer, unsigned size)
 		struct thread* t = thread_current();
 		struct list_elem* e = find_fd_element(fd, t);
 		if(e == NULL) // if no file found with given fd, return error
-			return -1;
+			{
+				goto read_done;
+			}
 		struct fd_list_element *fd_element = list_entry(e, struct fd_list_element, elem_fd);
-		return file_read (fd_element->fp, buffer, size) ;
+			lock_acquire(&read_write_lock);
+
+		return_size = file_read (fd_element->fp, buffer, size) ;
+			lock_release(&read_write_lock);
+
 	}
+
+	read_done:
+
+
+
+	return return_size;
 }
 
 /* Writes size bytes from buffer to the open file fd. Returns the number of bytes actually written, which may be less than size if some bytes could not be written.
@@ -389,6 +410,7 @@ int read (int fd, void *buffer, unsigned size)
 
 int write (int fd, const void *buffer, unsigned size) { //Already done in file.c, but will implement anyway (super confused now)
 		
+
 	struct thread* current_thread = thread_current();
 	struct file* fp = NULL;
 	int return_size = -1;
@@ -398,13 +420,19 @@ int write (int fd, const void *buffer, unsigned size) { //Already done in file.c
 		putbuf(buffer, size);
 		return_size = size;
 	}
+
 	else if (fd != 0 && fd !=1) {
 		struct list_elem* e = find_fd_element(fd, current_thread);
 		if(e == NULL)
-			return -1; // return error if file not found
+			goto write_done; // return error if file not found
 		struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
+				lock_acquire(&read_write_lock);
+
 		return_size = file_write (fd_element->fp, buffer, size) ;
+			lock_release(&read_write_lock);
+
 	}
+write_done:
 
 	return return_size;
 }
@@ -519,11 +547,12 @@ struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pi
 		child_element->parent_pid = parent_thread->tid;
 		child_element->status = PROCESS_RUNNING;
 		child_element->sema = NULL; // set only in process_wait by the parent, used for waiting
-		/* also give the child thread struct itself a ptr to the child_element
-		   so that the child can update its status/ and exit status and the parent will see */
+
 		// TODO: This may cause concurrency issues by doing it this way, but we will see....
 		struct thread* child_thread = find_thread(pid);
 		child_thread->child_data = child_element;
+		/* also give the child thread struct itself a ptr to the child_element
+		   so that the child can update its status/ and exit status and the parent will see */
 		child_element->inception = &child_thread->child_data;
 		list_push_back(&parent_thread->child_list, &child_element->elem_child);
 		return child_element;
