@@ -19,7 +19,7 @@ please never push if you cause tests to fail that weren't failing already)
 #TEST STATUS
 - FAIL tests/userprog/exec-missing
 From the stanford pintos project 2, exec missing is more complicated than we had thought:
-Runs the executable whose name is given in cmd_line, passing any given arguments, and returns the new process's program id (pid). Must return pid -1, which otherwise should not be a valid pid, if the program cannot load or run for any reason. Thus, the parent process cannot return from the exec until it knows whether the child process successfully loaded its executable. You must use appropriate synchronization to ensure this.
+Process_execute does not directly run, but indirectly runs, the executable whose name is given in cmd_line, passing any given arguments, and returns the new process's program id (pid). Must return pid -1, which otherwise should not be a valid pid, if the program cannot load or run for any reason. Thus, the parent process cannot return from the process_execute until it knows whether the child process successfully loaded its executable. You must use appropriate synchronization to ensure this.
 - FAIL tests/userprog/no-vm/multi-oom
 Ziping will look into this one.
 - FAIL tests/filesys/base/syn-read
