@@ -24,13 +24,14 @@ bool seek(int fd, unsigned offset);
 bool close (int fd);
 void exit (int status, struct intr_frame *f);
 int write (int fd, const void *buffer, unsigned size);
-
-
+static struct lock fd_lock;
 void
 syscall_init (void) 
 {
   lock_init(&read_write_lock);
+  lock_init(&fd_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  lock_init(&open_close_lock);
 }
 
 static void
@@ -346,14 +347,15 @@ bool remove (const char *file)
 int open (const char *file) {
 
 	struct thread* current_thread = thread_current();
+	lock_acquire(&read_write_lock);
 	struct file* fp = filesys_open(file); //Again, already in filesys.c
+	lock_release(&read_write_lock);
 	int return_fd = -1;
 	/* Now update the file descriptor table */
 	if (fp != NULL) {
 
 		return_fd = add_file_to_fd_table(current_thread, fp);
 	}
-	
 	return return_fd; // IF The file could not be assigned a new file descriptor, then return_fd == -1
 }
 
@@ -472,8 +474,9 @@ bool close (int fd) {
 	struct list_elem*  return_e = list_remove (e);
 
 	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
-
+	lock_acquire(&read_write_lock);
 	file_close(fd_element->fp);
+	lock_release(&read_write_lock);
 	free(fd_element); // Free the element we just removed, please also see open()
 	return true;
 }
@@ -535,7 +538,9 @@ int add_file_to_fd_table(struct thread* current_thread, struct file* fp)
 		return_fd = fd_element->fd;
 
 		list_push_back(&current_thread->fd_table, &fd_element->elem_fd);
+		lock_acquire(&fd_lock);
 		current_thread->fd_table_counter++; // increment counter, so we have a new fd to use for the next file
+		lock_release(&fd_lock);
 		return return_fd;
 }
 // TODO: Should check if child is already added 
@@ -546,8 +551,8 @@ struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pi
 		child_element->pid = pid;
 		child_element->parent_pid = parent_thread->tid;
 		child_element->status = PROCESS_RUNNING;
-		child_element->sema = NULL; // set only in process_wait by the parent, used for waiting
-
+		child_element->sema = malloc(sizeof(struct semaphore)); // set only in process_wait by the parent, used for waiting
+		sema_init(child_element->sema, 0);
 		// TODO: This may cause concurrency issues by doing it this way, but we will see....
 		struct thread* child_thread = find_thread(pid);
 		child_thread->child_data = child_element;

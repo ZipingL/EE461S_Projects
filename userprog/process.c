@@ -84,6 +84,7 @@ process_execute (const char *file_name)
   parse_command_string(file_name_no_args, argv, true);
 
   /* check if the file is actually valid first, if not return -1*/
+  lock_acquire(&read_write_lock);
   struct dir *dir = dir_open_root ();
   struct inode *inode = NULL;
   bool file_validation = false;
@@ -94,8 +95,10 @@ process_execute (const char *file_name)
   if(inode != NULL)
   {
     inode_close(inode);
+    lock_release(&read_write_lock);
   } else if(file_validation == false) {
     palloc_free_page(fn_copy);
+    lock_release(&read_write_lock);
     return TID_ERROR;
   }
 
@@ -193,23 +196,17 @@ int process_wait (tid_t child_tid UNUSED)
   {
     printf("status: %d", child_element->status);
   }*/
-  struct semaphore sema;
-
-  // Check if this guy is already being waited on
-  if(child_element->sema != NULL)
-  {
-    return -1;
-  }
-
-  child_element->sema = &sema;
-  sema_init(child_element->sema, 0); 
+ // struct semaphore sema;
+ 
   sema_down(child_element->sema);
 
   int exit_status = child_element->exit_status;
 
-  // Remove done child
+  // Free the child's sema
+  free(child_element->sema);
+  // Remove done child from the thread's child_list
   list_remove(e);
-  // Free the child memory allocation
+  // Free the child element  memory allocation
   free(child_element);
 
   return exit_status;
@@ -234,10 +231,11 @@ process_exit (int exit_status)
   struct semaphore * child_sema = cur->child_data->sema;
   uint32_t *pd;
 
+  lock_acquire(&read_write_lock);
   file_close(cur->exec_fp);
-
-   //if(child_sema != NULL))
-  sema_up(child_sema); // notify waiting parent that the child is done
+  lock_release(&read_write_lock);
+  
+    sema_up(child_sema); // notify waiting parent that the child is done
 
   // Go through the child lists and free the data
      while (!list_empty (&cur->child_list))
@@ -393,10 +391,27 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Open executable file. */
   lock_acquire(&read_write_lock);
   file = filesys_open (argv[0]);
-  lock_release(&read_write_lock);
+
+
+  if(file == NULL)
+  {
+    struct dir *dir = dir_open_root ();
+    struct inode *inode = NULL;
+    bool file_validation = false;
+    if (dir != NULL)
+      file_validation = dir_lookup (dir, argv[0], &inode);
+    dir_close (dir);
+
+    if(inode != NULL)
+    {
+      file = filesys_open(inode);
+    }
+
+  }
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", argv[0]);
+        lock_release(&read_write_lock);
       goto done; 
     }
 
@@ -411,8 +426,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phnum > 1024)
     {
       printf ("load: %s: error loading executable\n", argv[0]);
+        lock_release(&read_write_lock);
       goto done; 
     }
+
+      lock_release(&read_write_lock);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;

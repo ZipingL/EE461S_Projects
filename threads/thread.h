@@ -95,15 +95,10 @@ struct thread
     struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
-    //struct semaphore* load_sema;
-   // int load_status;
-    /* Owned by userprog/process.c. */
-    // look in process.h for these declartions
-    //struct child_list_elem * child_data;
     struct list child_list;     /* Every thread has its own list of children */
     uint32_t *pagedir;                  /* Page directory. */
 	  struct list fd_table;               /* A linked list to hold the thread's current files */
-   int fd_table_counter; /* Counts how many fd entries have been added
+    int fd_table_counter; /* Counts how many fd entries have been added
                             For determining fd values to assign */
    struct file * exec_fp;
    struct child_list_elem *child_data; //Child can update its status for parent to see
