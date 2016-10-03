@@ -3,6 +3,7 @@
 #include "threads/thread.h"
 #define MAX_ARGS_COUNT 100
 #define MAX_FILE_NAME_SIZE 20
+struct lock find_child;
 
 
 tid_t process_execute (const char *file_name);
@@ -33,6 +34,8 @@ enum child_status_t {
 
 // Struct to be used for the child list
 struct child_list_elem {
+	struct semaphore * load_status; // for allowing the parent to wait for the child to finish loading!
+	bool mom_im_out_of_money; // for telling the parent the child cannot load due to memory gone!
   	struct list_elem elem_child; // use the linked list data type proved by pintos in list.h/list.c
 	tid_t pid;
 	tid_t parent_pid;

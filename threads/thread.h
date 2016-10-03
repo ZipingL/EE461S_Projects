@@ -95,6 +95,8 @@ struct thread
     struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
+
+    char full_name[40];
     struct list child_list;     /* Every thread has its own list of children */
     uint32_t *pagedir;                  /* Page directory. */
 	  struct list fd_table;               /* A linked list to hold the thread's current files */

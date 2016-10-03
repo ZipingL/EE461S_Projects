@@ -25,7 +25,6 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int parse_command_string(char* command, char* argv[], bool set_first_only);
 
-
 /* Take in Command String and parse it into words 
    Returns the Number of arguments processed
    Assumes that argv[] is large enough to hold all argument string ptrs
@@ -82,7 +81,7 @@ process_execute (const char *file_name)
   strlcpy(file_name_no_args, file_name, file_char_length);
   char* argv[1];
   parse_command_string(file_name_no_args, argv, true);
-
+  struct child_list_elem* success = NULL;
   /* check if the file is actually valid first, if not return -1*/
   lock_acquire(&read_write_lock);
   struct dir *dir = dir_open_root ();
@@ -114,13 +113,25 @@ process_execute (const char *file_name)
     // Add created process to the current thread's child_list
   struct thread* t = thread_current();
   // Using tid_t for child id for now, may need to change
-  struct child_list_elem* success = add_child_to_list(t, tid);
+  success = add_child_to_list(t, tid);
     if(success ==NULL)
     {
       palloc_free_page(fn_copy);
       return TID_ERROR;
     }
   }
+
+  /* wait for child to be done loading up (start_process) then exit*/
+  struct semaphore sema;
+
+  sema_init(&sema,0);
+
+  success->load_status = &sema;
+
+  sema_down(&sema);
+
+  if(success->mom_im_out_of_money)
+    return TID_ERROR;
 
   return tid;
 
@@ -133,6 +144,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+  struct thread * t = thread_current();
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -148,7 +160,12 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
+  {
+      sema_up(t->child_data->load_status);
       exit(-1);
+  }
+
+  sema_up(t->child_data->load_status);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -188,7 +205,9 @@ int process_wait (tid_t child_tid UNUSED)
 {
 
   struct thread* current_thread = thread_current();
+  lock_acquire(&find_child);
   struct list_elem* e = find_child_element(current_thread, child_tid);
+  lock_release(&find_child);
   if(e == NULL) return -1; // return false if fd not found
   struct  child_list_elem *child_element = list_entry (e, struct child_list_elem, elem_child);
   //printf("child_list wait addr: %p\n", child_element);
@@ -235,7 +254,6 @@ process_exit (int exit_status)
   file_close(cur->exec_fp);
   lock_release(&read_write_lock);
   
-    sema_up(child_sema); // notify waiting parent that the child is done
 
   // Go through the child lists and free the data
      while (!list_empty (&cur->child_list))
@@ -271,6 +289,7 @@ process_exit (int exit_status)
       pagedir_destroy (pd);
     }
 
+    sema_up(child_sema); // notify waiting parent that the child is done
 
 }
 
@@ -373,6 +392,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   bool success = false;
   int i;
 
+  int done_level = -1;
     /* get the actual file name, instead of the name + arguments */
   int file_char_length = strlen(file_name) + 1;
   char file_name_no_args[file_char_length];
@@ -483,8 +503,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
+              {
+                done_level = 1;
                 goto done;
-            }
+              }          
+             }
           else
             goto done;
           break;
@@ -508,7 +531,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 
  if(!success)
-  file_close (file);
+ {
+    file_close (file);
+    if(done_level == 1)
+      t->child_data->mom_im_out_of_money = true;
+ }
   else
   {
         file_deny_write(file);
@@ -516,6 +543,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
         t->exec_fp = file;
 
   }
+  //printf("Sucess %d, level %d\n", success, done_level);
   return success;
 }
 /* load() helpers. */

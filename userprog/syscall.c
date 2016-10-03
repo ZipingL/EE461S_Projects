@@ -32,6 +32,7 @@ syscall_init (void)
   lock_init(&fd_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   lock_init(&open_close_lock);
+  lock_init(&find_child);
 }
 
 static void
@@ -283,7 +284,7 @@ void exit (int status, struct intr_frame *f) {
 	if(f!=NULL)
 		f->eax = status; //Save the status that was returned by the existing process to the stack
 	struct thread* t = thread_current();
-	printf ("%s: exit(%d)\n", t->name, status);
+	printf ("%s: exit(%d)\n", t->full_name, status);
 
 	struct list_elem * e = NULL;
 	/*close all open files, but do not free the actual element in the list, we do that in process_exit()*/
@@ -551,6 +552,7 @@ struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pi
 		child_element->pid = pid;
 		child_element->parent_pid = parent_thread->tid;
 		child_element->status = PROCESS_RUNNING;
+		child_element->mom_im_out_of_money = false;
 		child_element->sema = malloc(sizeof(struct semaphore)); // set only in process_wait by the parent, used for waiting
 		sema_init(child_element->sema, 0);
 		// TODO: This may cause concurrency issues by doing it this way, but we will see....
