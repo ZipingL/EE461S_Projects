@@ -24,7 +24,7 @@ Project 2: Userprograms: All 76/76 tests passed.
 #Note to anyone who is viewing this repo
 One day, when my student account expires, this repo will become public. 
 If you are viewing this as a public repo, and you are currently working on
-project 2, I strongly recommend you do simply just copy what is done here.
+projects pintos, I strongly recommend you do not simply just copy what is done here.
 Feel free to use this as a reference, or a guide if you are lost, but
 if you simply use this to finish your project for no good reason,
 you are setting yourself up for failure for your class.
