@@ -17,9 +17,13 @@ FirstName LastName <email@domain.example>
 >> If you have any preliminary comments on your submission, notes for the
 >> TAs, or extra credit, please give them here.
 
+Created this doc because it was mentioned on Piazza that it could be extra credit
+
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
+
+A few slides that were prepared by Stanford professors and were available online.
 
 			   ARGUMENT PASSING
 			   ================
@@ -79,13 +83,15 @@ This function is what sets up the stack to be used by the system calls. The file
 
 ---- RATIONALE ----
 
->> A3: When strtok() is used, it can parse the same argument multiple times. That is, if it is called twice, then it will parse the same argument twice. Now if another thread decides to parse the value that was passed to strtok(), then that value will be modified without any other thread being aware of such an action. However, strtok_r() keeps track of the context of successive calls, so that if a different thread parses the same thing, the function understand that a new thread is parsing that string, and so it maintains context between multiple threads. This is why Pintos uses strtok_r() - it is to avoid concurrency issues between multiple threads.
+>> A3: Why does Pintos implement strtok_r() and not strtok()?
 
->> A4: In Unix systems, when the shell does the separation and then makes a system call, the stack is then already set up with the arguments in the correct order. The work is done ahead of time by the shell, which means the kernel can then be more responsive when it comes to actually getting the request it was sent completed. Now another advantage lies with concurrency. Since the shell can keep track of multiple jobs at once, it already knows the context in which the arguments are parsed. That is, it knows what process it is dealing with and what that process is expecting to see. Thus, the shell can easily switch between contexts compared to the kernel and so Pintos does not have to concern itself with such things.
+When strtok() is used, it can parse the same argument multiple times. That is, if it is called twice, then it will parse the same argument twice. Now if another thread decides to parse the value that was passed to strtok(), then that value will be modified without any other thread being aware of such an action. However, strtok_r() keeps track of the context of successive calls, so that if a different thread parses the same thing, the function understand that a new thread is parsing that string, and so it maintains context between multiple threads. This is why Pintos uses strtok_r() - it is to avoid concurrency issues between multiple threads.
 
-In Pintos, the kernel separates commands into a executable name
+>> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
+
+In Unix systems, when the shell does the separation and then makes a system call, the stack is then already set up with the arguments in the correct order. The work is done ahead of time by the shell, which means the kernel can then be more responsive when it comes to actually getting the request it was sent completed. Now another advantage lies with concurrency. Since the shell can keep track of multiple jobs at once, it already knows the context in which the arguments are parsed. That is, it knows what process it is dealing with and what that process is expecting to see. Thus, the shell can easily switch between contexts compared to the kernel and so Pintos does not have to concern itself with such things.
 
 			     SYSTEM CALLS
 			     ============
@@ -152,7 +158,9 @@ File descriptors are unique to each process. When a file is opened, it is assign
 
 ---- ALGORITHMS ----
 
->> B3:
+>> B3: Describe your code for reading and writing user data from the
+>> kernel.
+
 Before read() or write() is even implemented, the file to read or write to is expected to have been opened and added to the file descriptor table for that process, or an error is returned.
 
 ---- For read(int fd, void* buffer, unsigned size) ----
@@ -161,18 +169,17 @@ If the user wants to read from STDIN, then input_getc() is used to collect a cha
 ---- For write(int fd, const void *buffer, unsigned size) ----
 The write function is similar. It also checks for whether the user wants to read from STDOUT. If they do, the appropriate number of bytes is stored in buffer using putbuf(). Else, the function again verifies the existence of the given fd in the file descriptor table and then locks down other processes while it writes to the file. The function then returns the number of bytes written.
 
->> B4:
-
-
-
-Suppose a system call causes a full page (4,096 bytes) of data
+>> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
 >> and the greatest possible number of inspections of the page table
 >> (e.g. calls to pagedir_get_page()) that might result?  What about
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
->> B5:
+
+
+>> B5: Briefly describe your implementation of the "wait" system call
+>> and how it interacts with process termination.
 
 The system call wait depends entirely on process_wait(). It merely gives that function that the user wants to wait on, and then returns the return value of process_wait()
 
@@ -215,7 +222,7 @@ The code first actually loads the process using process_execute() and ensures th
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
 
-P cannot call wait(C) before C exits. This is because after the child to operate on is found (and only one process can do so at once, thanks to the lock), the parent must wait on the child to do a sema-up so that the parent can continue. Otherwise, it will continue to wait on C before C exits. After C exits, again, the parent has already found the child element without other processes interfering, so then the parent will be able to call free() on that child element without having to worry about other processes. This also ensures that all resources are freed, because even in multiple threads, all processes will be aware of what child is being freed. If the parent P exits early, then it must call process_exit(), where the children are then forced to clear themselves by setting their attributes to the proper values. This also takes care of issues that crop up after C exits. The only other special case is if P and C exit at the same time. This would cause both to call process_exit(). However, only one process can free what it needs to due to our use of locks, so this case will then become similar to P exiting before or after C, and as said above, that is taken care of.
+P can only call wait(C) when it wants to wait for C to finish. This is because after the child to operate on is found (and only one process can do so at once, thanks to the lock), the parent must wait on the child to do a sema-up so that the parent can continue. Otherwise, it will continue to wait on C before C exits. After C exits, again, the parent has already found the child element without other processes interfering, so then the parent will be able to call free() on that child element without having to worry about other processes. This also ensures that all resources are freed, because even in multiple threads, all processes will be aware of what child is being freed. If the parent P exits early, then it must call process_exit(), where the children are then forced to clear themselves by setting their attributes to the proper values. This also takes care of issues that crop up after C exits. The only other special case is if P and C exit at the same time. This would cause both to call process_exit(). However, only one process can free what it needs to due to our use of locks, so this case will then become similar to P exiting before or after C, and as said above, that is taken care of.
 
 ---- RATIONALE ----
 
