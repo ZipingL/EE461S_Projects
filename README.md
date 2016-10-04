@@ -28,6 +28,9 @@ projects pintos, I strongly recommend you do not simply just copy what is done h
 Feel free to use this as a reference, or a guide if you are lost, but
 if you simply use this to finish your project for no good reason,
 you are setting yourself up for failure for your class.
+Stanford Pintos Documentation will do a great job on 
+pointing you to the right direction, more so than
+looking up solutions ever will.
 
 
 <!-- Links -->
