@@ -25,7 +25,7 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int parse_command_string(char* command, char* argv[], bool set_first_only);
 
-/* Take in Command String and parse it into words 
+/* Take in Command String and parse it into words
    Returns the Number of arguments processed
    Assumes that argv[] is large enough to hold all argument string ptrs
    Messes with the contents of the string command through strtok_r
@@ -61,7 +61,7 @@ int parse_command_string(char* command, char* argv[], bool set_first_only)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
@@ -106,9 +106,9 @@ process_execute (const char *file_name)
 
   if (tid == TID_ERROR)
   {
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
   }
-  else 
+  else
   {
     // Add created process to the current thread's child_list
   struct thread* t = thread_current();
@@ -121,7 +121,7 @@ process_execute (const char *file_name)
     }
   }
 
-  /* wait for child to be done loading up (start_process) then exit*/
+  /* wait for child to be done loading up (start_process) tdhen exit*/
   struct semaphore sema;
 
   sema_init(&sema,0);
@@ -159,7 +159,7 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success)
   {
       sema_up(t->child_data->load_status);
       exit(-1);
@@ -190,18 +190,18 @@ start_process (void *file_name_)
 
 /* Ziping: How this function works:
    it firsts find the child from the child_list
-   it then does a sema_down, this basically means 
+   it then does a sema_down, this basically means
    its going to wait until some other function or code
    does a sema_up on the same semaphore: child_element->sema
    the child has access to the child_element through its
    thread struct child_data member, which points to it (see syscall.c add_child...())
-   thus the child will do a sema_up when 
+   thus the child will do a sema_up when
    it finishes exiting (see process_exit)
    this would thus give back control to the parent who called sema_down
    the parent then finishes by removing the child from the child_list
    if you are wondering about zombies, see process_exit
    */
-int process_wait (tid_t child_tid UNUSED) 
+int process_wait (tid_t child_tid UNUSED)
 {
 
   struct thread* current_thread = thread_current();
@@ -216,7 +216,7 @@ int process_wait (tid_t child_tid UNUSED)
     printf("status: %d", child_element->status);
   }*/
  // struct semaphore sema;
- 
+
   sema_down(child_element->sema);
 
   int exit_status = child_element->exit_status;
@@ -229,7 +229,9 @@ int process_wait (tid_t child_tid UNUSED)
   free(child_element);
 
   return exit_status;
-    
+
+
+
 }
 
 /* Free the current process's resources. Then exits the process officially*/
@@ -253,7 +255,7 @@ process_exit (int exit_status)
   lock_acquire(&read_write_lock);
   file_close(cur->exec_fp);
   lock_release(&read_write_lock);
-  
+
 
   // Go through the child lists and free the data
      while (!list_empty (&cur->child_list))
@@ -271,11 +273,11 @@ process_exit (int exit_status)
        struct  fd_list_element *element = list_entry (e, struct fd_list_element, elem_fd);
        free(element);
      }
-     
+
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
-  if (pd != NULL) 
+  if (pd != NULL)
     {
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
@@ -382,7 +384,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *file_name, void (**eip) (void), void **esp)
 {
 
   struct thread *t = thread_current ();
@@ -403,7 +405,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
-  if (t->pagedir == NULL) 
+  if (t->pagedir == NULL)
     goto done;
   process_activate ();
 
@@ -428,11 +430,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   }
-  if (file == NULL) 
+  if (file == NULL)
     {
       printf ("load: %s: open failed\n", argv[0]);
         lock_release(&read_write_lock);
-      goto done; 
+      goto done;
     }
 
 
@@ -447,14 +449,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
     {
       printf ("load: %s: error loading executable\n", argv[0]);
         lock_release(&read_write_lock);
-      goto done; 
+      goto done;
     }
 
       lock_release(&read_write_lock);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
-  for (i = 0; i < ehdr.e_phnum; i++) 
+  for (i = 0; i < ehdr.e_phnum; i++)
     {
       struct Elf32_Phdr phdr;
 
@@ -465,7 +467,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
         goto done;
       file_ofs += sizeof phdr;
-      switch (phdr.p_type) 
+      switch (phdr.p_type)
         {
         case PT_NULL:
         case PT_NOTE:
@@ -479,7 +481,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
         case PT_SHLIB:
           goto done;
         case PT_LOAD:
-          if (validate_segment (&phdr, file)) 
+          if (validate_segment (&phdr, file))
             {
               bool writable = (phdr.p_flags & PF_W) != 0;
               uint32_t file_page = phdr.p_offset & ~PGMASK;
@@ -494,7 +496,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
                                 - read_bytes);
                 }
-              else 
+              else
                 {
                   /* Entirely zero.
                      Don't read anything from disk. */
@@ -506,7 +508,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
               {
                 done_level = 1;
                 goto done;
-              }          
+              }
              }
           else
             goto done;
@@ -553,24 +555,24 @@ static bool install_page (void *upage, void *kpage, bool writable);
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
 static bool
-validate_segment (const struct Elf32_Phdr *phdr, struct file *file) 
+validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 {
   /* p_offset and p_vaddr must have the same page offset. */
-  if ((phdr->p_offset & PGMASK) != (phdr->p_vaddr & PGMASK)) 
-    return false; 
+  if ((phdr->p_offset & PGMASK) != (phdr->p_vaddr & PGMASK))
+    return false;
 
   /* p_offset must point within FILE. */
-  if (phdr->p_offset > (Elf32_Off) file_length (file)) 
+  if (phdr->p_offset > (Elf32_Off) file_length (file))
     return false;
 
   /* p_memsz must be at least as big as p_filesz. */
-  if (phdr->p_memsz < phdr->p_filesz) 
-    return false; 
+  if (phdr->p_memsz < phdr->p_filesz)
+    return false;
 
   /* The segment must not be empty. */
   if (phdr->p_memsz == 0)
     return false;
-  
+
   /* The virtual memory region must both start and end within the
      user address space range. */
   if (!is_user_vaddr ((void *) phdr->p_vaddr))
@@ -611,14 +613,14 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    or disk read error occurs. */
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
+              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
   file_seek (file, ofs);
-  while (read_bytes > 0 || zero_bytes > 0) 
+  while (read_bytes > 0 || zero_bytes > 0)
     {
       /* Calculate how to fill this page.
          We will read PAGE_READ_BYTES bytes from FILE
@@ -635,15 +637,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
           palloc_free_page (kpage);
-          return false; 
+          return false;
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
       /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
+      if (!install_page (upage, kpage, writable))
         {
           palloc_free_page (kpage);
-          return false; 
+          return false;
         }
 
       /* Advance. */
@@ -657,7 +659,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 
-/*The table below shows the state of an example stack and the relevant registers 
+/*The table below shows the state of an example stack and the relevant registers
 right before the beginning of the user program, assuming PHYS_BASE is 0xC0000000:
         Address   Name            Data        Type
         0xbffffffc  argv[3][...]  "bar\0"     char[4]
@@ -674,13 +676,13 @@ right before the beginning of the user program, assuming PHYS_BASE is 0xC0000000
         0xbfffffd0  argc          4            int
         0xbfffffcc  return address  0          void (*) ()*/
 static bool
-setup_stack (void **esp, char* file_name) 
+setup_stack (void **esp, char* file_name)
 {
   uint8_t *kpage;
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
+  if (kpage != NULL)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
@@ -724,7 +726,7 @@ setup_stack (void **esp, char* file_name)
         }
         unioned_esp.p_word--; // set esp pointer to next empty uint32_t element
         /* add null to signify end of argv pointers */
-        *unioned_esp.p_word = NULL;         
+        *unioned_esp.p_word = NULL;
         unioned_esp.p_word--;
         argc_cpy = argc-1;
 
@@ -779,4 +781,3 @@ install_page (void *upage, void *kpage, bool writable)
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
-

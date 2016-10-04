@@ -26,7 +26,7 @@ void exit (int status, struct intr_frame *f);
 int write (int fd, const void *buffer, unsigned size);
 static struct lock fd_lock;
 void
-syscall_init (void) 
+syscall_init (void)
 {
   lock_init(&read_write_lock);
   lock_init(&fd_lock);
@@ -36,7 +36,7 @@ syscall_init (void)
 }
 
 static void
-syscall_handler (struct intr_frame *f) //UNUSED) 
+syscall_handler (struct intr_frame *f) //UNUSED)
 {
 
 
@@ -60,9 +60,9 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 	uint32_t system_call_number = * (uint32_t**)(f->esp+0); //Create a pointer to the top of the stack (looks at argv[0])
 	uint32_t* stack_ptr =  (uint32_t*)(f->esp+0); // Two pointers with same address, but using different names
 
-	// Check for valid arg pointers 
+	// Check for valid arg pointers
   	if (!( is_user_vaddr (stack_ptr + 1) && is_user_vaddr (stack_ptr + 2) && is_user_vaddr (stack_ptr + 3)))
-    	exit (-1,f); 
+    	exit (-1,f);
 	// to avoid confusion in usage
 	char* name = NULL;
 	uint32_t file_size = 0;
@@ -276,7 +276,7 @@ int filesize_get(int fd)
 void halt (void) {
 	shutdown_power_off(); //Fairly straightforward
 }
-    
+
 /* Terminates the current user program, returning status to the kernel. If the process's parent waits for it (see below), this is the status that will be returned. Conventionally, a status of 0 indicates success and nonzero values indicate errors. */
 
 void exit (int status, struct intr_frame *f) {
@@ -293,10 +293,10 @@ void exit (int status, struct intr_frame *f) {
         {
           	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
 
-          
+
           	file_close(fd_element->fp); // this call frees fp
           	fd_element->fp = NULL;
-          
+
         }
 
 	thread_exit_process(status); //A function in thread.h that terminates and removes from the list of threads the current thread t. t's status also becomes THREAD_DYING
@@ -309,7 +309,7 @@ void exit (int status, struct intr_frame *f) {
     If pid is still alive, waits until it terminates. Then, returns the status that pid passed to exit. If pid did not call exit(), but was terminated by the kernel (e.g. killed due to an exception), wait(pid) must return -1. It is perfectly legal for a parent process to wait for child processes that have already terminated by the time the parent calls wait, but the kernel must still allow the parent to retrieve its child's exit status, or learn that the child was terminated by the kernel. wait must fail and return -1 immediately if any of the following conditions is true:
         - pid does not refer to a direct child of the calling process. pid is a direct child of the calling process if and only if the calling process received pid as a return value from a successful call to exec.
         - Note that children are not inherited: if A spawns child B and B spawns child process C, then A cannot wait for C, even if B is dead. A call to wait(C) by process A must fail. Similarly, orphaned processes are not assigned to a new parent if their parent process exits before they do.
-		- The process that calls wait has already called wait on pid. That is, a process may wait for any given child at most once. 
+		- The process that calls wait has already called wait on pid. That is, a process may wait for any given child at most once.
 		- Processes may spawn any number of children, wait for them in any order, and may even exit without having waited for some or all of their children. Your design should consider all the ways in which waits can occur. All of a process's resources, including its struct thread, must be freed whether its parent ever waits for it or not, and regardless of whether the child exits before or after its parent.
 
     You must ensure that Pintos does not terminate until the initial process exits. The supplied Pintos code tries to do this by calling process_wait() (in "userprog/process.c") from main() (in "threads/init.c"). We suggest that you implement process_wait() according to the comment at the top of the function and then implement the wait system call in terms of process_wait().
@@ -378,7 +378,7 @@ int read (int fd, void *buffer, unsigned size)
 		{
 			((char*) buffer) [i] = input_getc();
 		}
-		return_size = size;;
+		return_size = size;
 
 	}
 
@@ -412,14 +412,14 @@ int read (int fd, void *buffer, unsigned size)
     Fd 1 writes to the console. Your code to write to the console should write all of buffer in one call to putbuf(), at least as long as size is not bigger than a few hundred bytes. (It is reasonable to break up larger buffers.) Otherwise, lines of text output by different processes may end up interleaved on the console, confusing both human readers and our grading scripts. */
 
 int write (int fd, const void *buffer, unsigned size) { //Already done in file.c, but will implement anyway (super confused now)
-		
+
 
 	struct thread* current_thread = thread_current();
 	struct file* fp = NULL;
 	int return_size = -1;
 
-	if (fd == 1) // 
-	{	
+	if (fd == 1) //
+	{
 		putbuf(buffer, size);
 		return_size = size;
 	}
@@ -465,7 +465,7 @@ unsigned tell (int fd) {
 	return file_seek(fd_element->fp);
 
 }
-    
+
 /* Closes file descriptor fd. Exiting or terminating a process implicitly closes all its open file descriptors, as if by calling this function for each one. */
 
 bool close (int fd) {
@@ -492,7 +492,7 @@ bool close (int fd) {
 struct list_elem* find_fd_element(int fd, struct thread* current_thread)
 {
 	    struct list_elem *e;
-      	// search through the fd_table for the matching fd 
+      	// search through the fd_table for the matching fd
 		for (e = list_begin (&current_thread->fd_table); e != list_end (&current_thread->fd_table);
            e = list_next (e))
         {
@@ -513,7 +513,7 @@ struct list_elem* find_fd_element(int fd, struct thread* current_thread)
 struct list_elem* find_child_element(struct thread* current_thread, tid_t pid)
 {
 	    struct list_elem *e;
-      	// search through the fd_table for the matching fd 
+      	// search through the fd_table for the matching fd
 		for (e = list_begin (&current_thread->child_list); e != list_end (&current_thread->child_list);
            e = list_next (e))
         {
@@ -544,7 +544,7 @@ int add_file_to_fd_table(struct thread* current_thread, struct file* fp)
 		lock_release(&fd_lock);
 		return return_fd;
 }
-// TODO: Should check if child is already added 
+// TODO: Should check if child is already added
 struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pid)
 {
 		/* create new child element to push to the parent's child list*/
@@ -566,7 +566,7 @@ struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pi
 }
 
 
- 	
+
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
@@ -579,7 +579,7 @@ get_user (const uint8_t *uaddr)
        : "=&a" (result) : "m" (*uaddr));
   return result;
 }
- 
+
 /* Writes BYTE to user address UDST.
    UDST must be below PHYS_BASE.
    Returns true if successful, false if a segfault occurred. */

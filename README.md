@@ -17,14 +17,7 @@ This is the [User Programs][userprog] project in Pintos. To get started:
 please never push if you cause tests to fail that weren't failing already)
 
 #TEST STATUS
-- FAIL tests/userprog/no-vm/multi-oom
-No idea whats going on with this one^
-- FAIL tests/filesys/base/syn-read
-Currently syn-read and syn-write is failing because of a weird issue. The pintos loads two executables, however the test is failing 
-since pintos is unable to actually run the second executable. From what I can see, the second executable is being loaded by 10 child processes, thus it may be failing to load since everyone is trying to load the executable. This is my guess, but it may not be correct.
-- FAIL tests/filesys/base/syn-write
-- 4 of 76 tests failed.
-
+Done, 76 passed
 
 
 
