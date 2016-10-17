@@ -82,25 +82,8 @@ process_execute (const char *file_name)
   char* argv[1];
   parse_command_string(file_name_no_args, argv, true);
   struct child_list_elem* success = NULL;
-  /* check if the file is actually valid first, if not return -1*/
-  lock_acquire(&read_write_lock);
-  struct dir *dir = dir_open_root ();
-  struct inode *inode = NULL;
-  bool file_validation = false;
-  if (dir != NULL)
-    file_validation = dir_lookup (dir, argv[0], &inode);
-  dir_close (dir);
 
-  if(inode != NULL)
-  {
-    inode_close(inode);
-    lock_release(&read_write_lock);
-  } else if(file_validation == false) {
-    palloc_free_page(fn_copy);
-    lock_release(&read_write_lock);
-    return TID_ERROR;
-  }
-
+  lock_acquire(&open_close_lock);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (argv[0], PRI_DEFAULT, start_process, fn_copy);
 
@@ -126,8 +109,8 @@ process_execute (const char *file_name)
 
   sema_init(&sema,0);
 
-  success->load_status = &sema;
-
+  success->load_status = &sema; //Done in syscall.c instead
+  lock_release(&open_close_lock);
   sema_down(&sema);
 
   if(success->mom_im_out_of_money)
@@ -159,13 +142,16 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
+
   if (!success)
   {
+      t->load_failed = true;
       sema_up(t->child_data->load_status);
       exit(-1);
   }
 
   sema_up(t->child_data->load_status);
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -205,9 +191,9 @@ int process_wait (tid_t child_tid UNUSED)
 {
 
   struct thread* current_thread = thread_current();
-  lock_acquire(&find_child);
+  //lock_acquire(&find_child);
   struct list_elem* e = find_child_element(current_thread, child_tid);
-  lock_release(&find_child);
+  //lock_release(&find_child);
   if(e == NULL) return -1; // return false if fd not found
   struct  child_list_elem *child_element = list_entry (e, struct child_list_elem, elem_child);
   //printf("child_list wait addr: %p\n", child_element);
@@ -221,7 +207,7 @@ int process_wait (tid_t child_tid UNUSED)
 
   int exit_status = child_element->exit_status;
 
-  // Free the child's sema
+  // Free the "child data/ child list element" members
   free(child_element->sema);
   // Remove done child from the thread's child_list
   list_remove(e);
@@ -239,6 +225,20 @@ void
 process_exit (int exit_status)
 {
   struct thread *cur = thread_current ();
+    // free the fd table element and close its corresponding file
+     while(!list_empty(&cur->fd_table))
+     {
+       struct list_elem *e = list_pop_front (&cur->fd_table);
+       struct  fd_list_element *element = list_entry (e, struct fd_list_element, elem_fd);
+       file_close(element->fp);
+       free(element);
+     }
+  // Now free the file pointer to the code the user program ran on
+  lock_acquire(&open_close_lock);
+  if(cur->exec_fp != NULL)
+  file_close(cur->exec_fp);
+  lock_release(&open_close_lock);
+  printf ("%s: exit(%d)\n", cur->full_name, exit_status);
 
   // No need to report the exit status if the parent is dead,
   // when the parent dies, it sets the child_data pointer in all it's children's struct to NULL
@@ -248,13 +248,13 @@ process_exit (int exit_status)
   {
     cur->child_data->status = PROCESS_DONE;
     cur->child_data->exit_status = exit_status;
+    struct semaphore * child_sema = cur->child_data->sema;
+    sema_up(child_sema); // notify waiting parent that the child is done
+
   }
-  struct semaphore * child_sema = cur->child_data->sema;
   uint32_t *pd;
 
-  lock_acquire(&read_write_lock);
-  file_close(cur->exec_fp);
-  lock_release(&read_write_lock);
+
 
 
   // Go through the child lists and free the data
@@ -266,13 +266,7 @@ process_exit (int exit_status)
        free(child_element);
 
      }
-  // Go through the fd_table list and free the elements, all files have been closed by the calling function ( syscall.c exit() ) already
-     while(!list_empty(&cur->fd_table))
-     {
-       struct list_elem *e = list_pop_front (&cur->fd_table);
-       struct  fd_list_element *element = list_entry (e, struct fd_list_element, elem_fd);
-       free(element);
-     }
+
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -291,7 +285,6 @@ process_exit (int exit_status)
       pagedir_destroy (pd);
     }
 
-    sema_up(child_sema); // notify waiting parent that the child is done
 
 }
 
@@ -411,9 +404,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 
   /* Open executable file. */
-  lock_acquire(&read_write_lock);
+  lock_acquire(&open_close_lock);
   file = filesys_open (argv[0]);
-
+  lock_release(&open_close_lock);
 
   if(file == NULL)
   {
@@ -433,7 +426,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (file == NULL)
     {
       printf ("load: %s: open failed\n", argv[0]);
-        lock_release(&read_write_lock);
+     done_level = 1;
       goto done;
     }
 
@@ -448,11 +441,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phnum > 1024)
     {
       printf ("load: %s: error loading executable\n", argv[0]);
-        lock_release(&read_write_lock);
+        //lock_release(&read_write_lock);
       goto done;
     }
 
-      lock_release(&read_write_lock);
+    //  lock_release(&read_write_lock);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -531,20 +524,22 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
 
-
+lock_acquire(&open_close_lock);
  if(!success)
  {
-    file_close (file);
-    if(done_level == 1)
-      t->child_data->mom_im_out_of_money = true;
+/*
+    if(file != NULL)
+      //file_close(file);*/
+    t->exec_fp = file; //file;
+    t->child_data->mom_im_out_of_money = true;
  }
   else
   {
+      t->exec_fp = file;
         file_deny_write(file);
         struct thread* t = thread_current();
-        t->exec_fp = file;
-
   }
+ lock_release(&open_close_lock);
   //printf("Sucess %d, level %d\n", success, done_level);
   return success;
 }

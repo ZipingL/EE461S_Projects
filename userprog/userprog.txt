@@ -7,7 +7,7 @@
 >> Fill in the names and email addresses of your group members.
 Ziping Liu ziping@utexas.edu
 Tom Ermis etjm03@utexas.edu
-Mukundan Kuthalam mukundan@paduka.com
+Mukundan Kuthalam mukundan@utexas.edu
 
 Note to grader, this design document is not finished. We are still finishing
 up the design document and will turn it in before the deadline.
@@ -20,12 +20,22 @@ up the design document and will turn it in before the deadline.
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
+http://courses.cs.vt.edu/~cs3204/fall2009/pintos-vt-local/Project2Session.pdf
+http://dynamicvoltage.blogspot.com/2012/09/pintos-project-2-argument-passing.html
+
+
 
 			   ARGUMENT PASSING
 			   ================
 
 ---- DATA STRUCTURES ----
 
+struct child_element; // for use with linkedlist list.h
+struct fd_table_element; // for use with linkedlist list.h
+
+
+
+Some Examples of Use:
 ---- For process_execute(const char* file_name) ----
 int file_char_length; //This variable check the name of the file name that was passed into process_execute
 char file_name_no_args[file_char_length]; //This array stores that file name
@@ -38,8 +48,8 @@ struct child_list_elem *success; //A pointer to the newly created child process 
 
 ---- For process_wait(tid_t child_tid UNUSED) ----
 struct thread* current_thread; //A variable that contains information about the current thread
-struct list_elem* e; //This looks and gets information on the child process with the specified child_tid
-struct child_list_elem *child_element; //This looks in the list of currently running processes to get information on the child process
+struct list_elem* e; //This looks and gets information on the child process with the specified child_tid from the child_list list.h linkedlist
+struct child_list_elem *child_element; //This looks in the list of currently running processes to get information on the child process from the child_list list.h linkedlist
 int exit_status; //This value gets the exit status of the child process that the function was waiting on
 
 ---- For process_exit(int exit_status) ----
@@ -86,6 +96,7 @@ This function is what sets up the stack to be used by the system calls. The file
 In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
+The kernel thus would then do less processing work, and would not have to worry about strings as much.
 
 			     SYSTEM CALLS
 			     ============
@@ -244,15 +255,33 @@ the quarter.
 >> In your opinion, was this assignment, or any one of the three problems
 >> in it, too easy or too hard?  Did it take too long or too little time?
 
+This assignment was just about right. However, if we had not started right when the assignment
+was given to us, we would have been severely <REDACTED DUE TO OBSCENE LANGUAGE>
+
 >> Did you find that working on a particular part of the assignment gave
 >> you greater insight into some aspect of OS design?
+
+Yes. I now know why my computer does stupid things the way that it does.
+Learning about processes and how the OS mangages them is fascinating. 
+
+
 
 >> Is there some particular fact or hint we should give students in
 >> future quarters to help them solve the problems?  Conversely, did you
 >> find any of our guidance to be misleading?
 
+Yes. The hint should be: If you didn't read at least the stanford
+pintos document for the project, then you should, since it basically
+tells you what you have to do. Oh and, there are hundreds of powerpoints
+different professors have made for explaining this project to their students,
+you can easily find them on the internet with your favorite search engine.
+
 >> Do you have any suggestions for the TAs to more effectively assist
 >> students, either for future quarters or the remaining projects?
 
+Piazza is a great place and I'm glad we are using it. No complaints.
+
 >> Any other comments?
+
+No I don't think so.
 

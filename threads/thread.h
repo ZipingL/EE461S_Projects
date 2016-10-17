@@ -103,6 +103,7 @@ struct thread
     int fd_table_counter; /* Counts how many fd entries have been added
                             For determining fd values to assign */
    struct file * exec_fp;
+   bool load_failed;
    struct child_list_elem *child_data; //Child can update its status for parent to see
 #endif
 

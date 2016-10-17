@@ -283,12 +283,10 @@ void exit (int status, struct intr_frame *f) {
 
 	if(f!=NULL)
 		f->eax = status; //Save the status that was returned by the existing process to the stack
-	struct thread* t = thread_current();
-	printf ("%s: exit(%d)\n", t->full_name, status);
 
 	struct list_elem * e = NULL;
 	/*close all open files, but do not free the actual element in the list, we do that in process_exit()*/
-	for (e = list_begin (&t->fd_table); e != list_end (&t->fd_table);
+	/*for (e = list_begin (&t->fd_table); e != list_end (&t->fd_table);
            e = list_next (e))
         {
           	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
@@ -297,7 +295,7 @@ void exit (int status, struct intr_frame *f) {
           	file_close(fd_element->fp); // this call frees fp
           	fd_element->fp = NULL;
 
-        }
+        }*/
 
 	thread_exit_process(status); //A function in thread.h that terminates and removes from the list of threads the current thread t. t's status also becomes THREAD_DYING
 }
@@ -550,6 +548,7 @@ struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pi
 		/* create new child element to push to the parent's child list*/
 		struct child_list_elem* child_element = malloc(sizeof(struct child_list_elem));
 		child_element->pid = pid;
+    child_element->load_status = NULL;
 		child_element->parent_pid = parent_thread->tid;
 		child_element->status = PROCESS_RUNNING;
 		child_element->mom_im_out_of_money = false;
