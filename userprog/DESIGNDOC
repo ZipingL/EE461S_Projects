@@ -38,7 +38,8 @@ struct dir *dir; //This variable stores the root directory to be used to lookup 
 struct inode *inode; //Holds a pointer to the file, assuming file_name (in process_execute) points to a valid file
 bool file_validation; //Flag that is set if the file that is being used to start a process is set
 struct thread *t; //A pointer to the current thread
-struct child_list_elem *success; //A pointer to the newly created child process that either holds a pointer to the child in the child list or has NULL upon failure
+struct child_list_elem *success; //A pointer to the newly
+//created child process that either holds a pointer to the child in the child list or has NULL upon failure
 
 ---- For process_wait(tid_t child_tid UNUSED) ----
 struct thread* current_thread; //A variable that contains information about the current thread
@@ -50,7 +51,8 @@ int exit_status; //This value gets the exit status of the child process that the
 struct thread *cur; //Contains information about the current thread
 struct semaphore *child_sema;
 uint32_t *pd; //This has a pointer to the current process' page table entry
-struct list_elem *e; //This contains information on every child_list that the current process may have or every fd_table of the processes that called process_exit
+struct list_elem *e; //This contains information on every child_list...
+//that the current process may have or every fd_table of the processes that called process_exit
 struct child_list_elem *child_element; //This contains a pointer to every element of child_list
 struct fd_table_element *element; //This contains information on every element of the fd table
 
@@ -60,7 +62,8 @@ char* argv[MAX_ARGS_COUNT]; //An array of the argument parameters
 int argc; //This is the total number of arguments
 int argc_cpy; //The total number of agruments-1 to use as a counter when filling the stack
 uint32_t* esp_arg_ptrs[MAX_ARGS_COUNT]; //Stores pointers of where each string was stored in the stack
-int total_args_length_count; //Keeps track of the total number of bytes used by the args, so we can add padding if needed
+int total_args_length_count; //Keeps track of the total number...
+of bytes used by the args, so we can add padding if needed
 int arg_length; //Stores the length of each argument to add to total_args_length_count
 int char_per_word; //Stores how many bytes are in a word
 int remainder; //Stores how many bytes of padding are needed
@@ -69,29 +72,65 @@ char* temp; //Points to where argv starts
 ---- ALGORITHMS ----
 
 ---- For process_execute(const char* file_name) ----
-In order to start the process, there is no need to get the arguments that were given. Thus, by using a function called parse_command_arguments, the first step in process_execute is getting the file name that we want to use to start the process. parse_command_arguments achieves that purpose by splitting the input by spaces using strtok_r(). Now the process accquires a lock so that no other process interferes with the next few lines of code, which check if the file that was given is valid. If the file is valid, then a new thread is started and the parent waits for this child process to start. If the file name was invalid, the child was not added to the list of child processes, or the child process was not successfully started, an error is returned (tid = -1). The process does check for a full page table, so that the page table is not overflowing with entries.
+In order to start the process, there is no need to get the arguments that were given.
+Thus, by using a function called parse_command_arguments,
+the first step in process_execute is getting the file name that we want to use to start the process.
+parse_command_arguments achieves that purpose by splitting the input by spaces using strtok_r().
+Now the process accquires a lock so that no other process interferes with the next few lines of code,
+which check if the file that was given is valid. If the file is valid, then a new thread is started
+and the parent waits for this child process to start. If the file name was invalid, the child
+was not added to the list of child processes, or the child process was not successfully started,
+an error is returned (tid = -1). The process does check for a full page table, so that the page table
+is not overflowing with entries.
 
 ---- For process_wait(tid_t child_tid UNUSED) ----
-The thread that calls process_wait must first look for the child process that it wants to wait on. It then waits on that child process to report back that it finished, so then the parent can simply mark the child as done and remove it from the list of child processes.
+The thread that calls process_wait must first look for the child process that it wants to wait on.
+It then waits on that child process to report back that it finished,
+so then the parent can simply mark the child as done and remove it from the list of child processes.
 
 ---- For process_exit(int exit_status) ----
-Now process_exit must acctually exit the current process by having the child mark itself as done and close the file that it had to open to run its process. The current process then goes through its child lists and its fd table to remove any children processes and files that were open. Then the child removes its own page entry. This keeps the page table from overflowing.
+Now process_exit must acctually exit the current process by
+having the child mark itself as done and close the file that it had to open to run its process.
+ The current process then goes through its child lists and its fd table to remove any children processes
+ and files that were open. Then the child removes its own page entry. This keeps the page table from overflowing.
 
 ---- For setup_stack(void **esp, char* file_name) ----
-This function is what sets up the stack to be used by the system calls. The file_name, which contains all the information is parsed and the number of arguments it returns are also stored in two variables, one to push to the stack and one to use as an index to fill the stack. Then these arguments are pushed onto the stack in the right order (since we kept track of the maximum number of arguments) and then padding is added to the stack if needed, and this can be done by keeping track of the total number of arguments that were pushed and dividing it by 4. The remainder is the amount of padding needed in bytes. Then the pointer to argv is added and so is argc - the number of arguments that were given. Then the esp pointer is set to the correct location of the stack.
+This function is what sets up the stack to be used by the system calls.
+The file_name, which contains all the information is parsed and the number of arguments
+it returns are also stored in two variables, one to push to the stack and one to use as an index to fill the stack.
+Then these arguments are pushed onto the stack in the right order (since we kept track of the maximum number of arguments)
+ and then padding is added to the stack if needed, and this can be done by keeping track of the total number
+  of arguments that were pushed and dividing it by 4. The remainder is the amount of padding needed in bytes.
+	 Then the pointer to argv is added and so is argc - the number of arguments that were given.
+	 Then the esp pointer is set to the correct location of the stack.
 
 
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() and not strtok()?
 
-When strtok() is used, it can parse the same argument multiple times. That is, if it is called twice, then it will parse the same argument twice. Now if another thread decides to parse the value that was passed to strtok(), then that value will be modified without any other thread being aware of such an action. However, strtok_r() keeps track of the context of successive calls, so that if a different thread parses the same thing, the function understand that a new thread is parsing that string, and so it maintains context between multiple threads. This is why Pintos uses strtok_r() - it is to avoid concurrency issues between multiple threads.
+When strtok() is used, it can parse the same argument multiple times.
+ That is, if it is called twice, then it will parse the same argument twice.
+ Now if another thread decides to parse the value that was passed to strtok()
+ , then that value will be modified without any other thread being aware of such an action.
+  However, strtok_r() keeps track of the context of successive calls, so that if a different
+	thread parses the same thing, the function understand that a new thread is parsing that string,
+	 and so it maintains context between multiple threads. This is why Pintos uses strtok_r() -
+	 it is to avoid concurrency issues between multiple threads.
 
 >> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
 
-In Unix systems, when the shell does the separation and then makes a system call, the stack is then already set up with the arguments in the correct order. The work is done ahead of time by the shell, which means the kernel can then be more responsive when it comes to actually getting the request it was sent completed. Now another advantage lies with concurrency. Since the shell can keep track of multiple jobs at once, it already knows the context in which the arguments are parsed. That is, it knows what process it is dealing with and what that process is expecting to see. Thus, the shell can easily switch between contexts compared to the kernel and so Pintos does not have to concern itself with such things.
+In Unix systems, when the shell does the separation and then makes a system call,
+the stack is then already set up with the arguments in the correct order.
+The work is done ahead of time by the shell, which means the kernel can then be more
+responsive when it comes to actually getting the request it was sent completed.
+Now another advantage lies with concurrency. Since the shell can keep track of
+multiple jobs at once, it already knows the context in which the arguments are parsed.
+ That is, it knows what process it is dealing with and what that process is expecting to
+  see. Thus, the shell can easily switch between contexts compared to the kernel and so
+	 Pintos does not have to concern itself with such things.
 
 			     SYSTEM CALLS
 			     ============
@@ -262,4 +301,3 @@ the quarter.
 >> students, either for future quarters or the remaining projects?
 
 >> Any other comments?
-
