@@ -1,29 +1,7 @@
- Project2 - Process API and SysCalls
-
-This is the [User Programs][userprog] project in Pintos. To get started:
-
-- Form a team of 3 members
-
-1. Create a fork of this project2 repository (click on the "Fork" button above)
-1. Give your team write permissions under Settings -> Collaborators and Teams.
-1. Working on the Project on your Linux Machine:
-  2. [**Clone**][ref-clone] the repository to your computer.
-  2. As you work on the project, you will modify the files and [**commit**][ref-commit] changes to complete your solution.
-  2. [**Push**][ref-push]/sync the changes up to your fork on GitHub.
-1. Submitting your Project:
-  2. [Create a **pull request**][pull-request] on the original repository to turn in the assignment.
-
-- Tests Fail/Pass Status (Update this every time you push with what you see in make check,
-please never push if you cause tests to fail that weren't failing already)
-
-#TEST STATUS
-- FAIL tests/userprog/no-vm/multi-oom
-No idea whats going on with this one^
-- All test cases working (except for the sporadic case above, but that's just extra credit anyway)
-- Writing the wiki page to document the project
-
-#Project 3
-- Read about the project here: https://web.stanford.edu/class/cs140/projects/pintos/pintos_4.html
+#PROJECTS AND TEST STATUS
+## Project 3: Virtual Memory
+- Read about the project [here](https://github.com/ZipingL/EE461S_Projects/wiki/Project-3:-Intro-to-Virtual-Memory).
+- View the TODO List for Project3 [here](https://github.com/ZipingL/EE461S_Projects/projects/2).
 - Suggested Order of Implementation:
 	- Frame table (without swapping). Once complete, all project 2 test cases should still be passing
 	- Supplemental Page Table
@@ -33,6 +11,15 @@ No idea whats going on with this one^
 	- Page reclamation on process exit (the last three can be done in parallel)
 	- Eviction
 - I would focus on trying the last couple of problems on the practice exam, because it really does give you a good idea of how paging works and so would really clear up your understanding before you just start writing code.
+### Passed Tests
+- All tests failing. Edit this if you fixed some tests, e.g., add any tests that you pass to this list.
+
+## Project 2: User Programs
+- Writing the wiki page to document the project. Still need to finish [implementation details](https://github.com/ZipingL/EE461S_Projects/wiki/Project-2:-Implementation-Details).
+### Passed Tests
+- All tests passing. The protected Branch for the finished project2 code can be viewed [here](https://github.com/ZipingL/EE461S_Projects/tree/project2_userprograms).
+
+
 
 <!-- Links -->
 [userprog]: https://web.stanford.edu/class/cs140/projects/pintos/pintos_3.html#SEC32
