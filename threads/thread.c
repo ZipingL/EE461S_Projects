@@ -101,11 +101,13 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-  //Initialize the child list (what do I need to do here?)
+  //Initialize the child list for the god thread
   list_init(&initial_thread->child_list);
-  //Initialize fd table for ?
+  //Initialize fd table  for the god thread
   list_init(&initial_thread->fd_table);
   initial_thread->fd_table_counter = 2;
+  //This is for the supplementalpagetable
+  list_init(&initial_thread->spt);
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -219,6 +221,9 @@ thread_create (const char *name, int priority,
 
   /* Initialize data in thread, specifically child lists */
   list_init(&t->child_list);
+
+  /* Setup the supplemental page table*/
+  list_init(&t->spt);
 
   t->exec_fp = NULL;
   t->load_failed = false;

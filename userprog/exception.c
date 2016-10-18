@@ -5,7 +5,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
+#include "vm/page.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -29,7 +29,7 @@ static void page_fault (struct intr_frame *);
    Refer to [IA32-v3a] section 5.15 "Exception and Interrupt
    Reference" for a description of each of these exceptions. */
 void
-exception_init (void) 
+exception_init (void)
 {
   /* These exceptions can be raised explicitly by a user program,
      e.g. via the INT, INT3, INTO, and BOUND instructions.  Thus,
@@ -64,14 +64,14 @@ exception_init (void)
 
 /* Prints exception statistics. */
 void
-exception_print_stats (void) 
+exception_print_stats (void)
 {
   printf ("Exception: %lld page faults\n", page_fault_cnt);
 }
 
 /* Handler for an exception (probably) caused by a user process. */
 static void
-kill (struct intr_frame *f) 
+kill (struct intr_frame *f)
 {
   /* This interrupt is one (probably) caused by a user process.
      For example, the process might have tried to access unmapped
@@ -80,7 +80,7 @@ kill (struct intr_frame *f)
      the kernel.  Real Unix-like operating systems pass most
      exceptions back to the process via signals, but we don't
      implement them. */
-     
+
   /* The interrupt frame's code segment value tells us where the
      exception originated. */
   switch (f->cs)
@@ -91,7 +91,7 @@ kill (struct intr_frame *f)
       printf ("%s: dying due to interrupt %#04x (%s).\n",
               thread_name (), f->vec_no, intr_name (f->vec_no));
       intr_dump_frame (f);
-      thread_exit (); 
+      thread_exit ();
 
     case SEL_KCSEG:
       /* Kernel's code segment, which indicates a kernel bug.
@@ -99,7 +99,7 @@ kill (struct intr_frame *f)
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
       intr_dump_frame (f);
-      PANIC ("Kernel bug - unexpected interrupt in kernel"); 
+      PANIC ("Kernel bug - unexpected interrupt in kernel");
 
     default:
       /* Some other code segment?  Shouldn't happen.  Panic the
@@ -122,13 +122,13 @@ kill (struct intr_frame *f)
    description of "Interrupt 14--Page Fault Exception (#PF)" in
    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
 static void
-page_fault (struct intr_frame *f) 
+page_fault (struct intr_frame *f)
 {
   bool not_present;  /* True: not-present page, false: writing r/o page. */
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
-
+  struct thread* t = thread_current;
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
      data.  It is not necessarily the address of the instruction
@@ -137,6 +137,7 @@ page_fault (struct intr_frame *f)
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
+
 
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
@@ -150,21 +151,30 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-/*
-  /* Check if user are accessing a pointer (due to bad esp) that doesn't exist */
-  // kernel does it in syscall.c get_user, for checking for valid pointers
-  // user does it when its stupid
- // if(not_present && !write && is_user_vaddr(fault_addr))
-   // exit(-1);
 
-/*
-  /* Check if the user was doing a bad jump e.g. trying to read/write from bad address kernel*/
+  /* Exit immediately if the fault_addr is kerenl virtual address */
+  /* We have to make sure the user was trying to access user virtual address
+     the user should never access kernel virtual addresses */
+  /* Why are we doing this? Well this is how I handled bad
+     pointers which pointed to kernel vaddr when using syscalls,
+     forced a page fault to happen*/
+  if(!is_user_vaddr(fault_addr))
+    exit(-1);
 
-  /*
-  if(not_present)
-    exit(-1); */
+  struct supplement_page_table_elem* spe =
+    page_find_spe(&t->spt, fault_addr);
+    if(spe == NULL)
+      exit(-1);
 
-  exit(-1); // This is a hack, remove this if you are debugging a test! 
+  /* TODO: now that you have the Supplementale
+   * page table entry, you can easily figure out
+   * the context of the vaddr, e.g. which virtual page
+   * of the process thought it could access this page
+   * in physical memory. You can then figure out
+   * how to handle this fault, e.g. swap something
+
+
+  exit(-1); // This is a hack, remove this if you are debugging a test!
 
   /* Check if the user was doing a bad read, e.g. trying to read from null ptr*/
   //if(!write && user)
@@ -183,4 +193,3 @@ page_fault (struct intr_frame *f)
           user ? "user" : "kernel");
   kill (f);
 }
-
