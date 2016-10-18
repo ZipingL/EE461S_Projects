@@ -1,8 +1,4 @@
- Project2 - Process API and SysCalls
-
-
-
-
+This is our group's repository for our EE461S class.
 
 #PROJECTS AND TEST STATUS
 ## Project 3: Virtual Memory
