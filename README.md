@@ -18,7 +18,7 @@
 	- Eviction
 - I would focus on trying the last couple of problems on the practice exam, because it really does give you a good idea of how paging works and so would really clear up your understanding before you just start writing code.
 
-### TEST STATUS | Please view readme as raw format to prevent formatting issues.
+### TEST STATUS
 
 	pass tests/filesys/base/syn-write
 	pass tests/userprog/args-none
