@@ -24,6 +24,8 @@ struct supplement_page_table_elem* page_add_supplemental_elem
   spe->vaddr = vaddr;
   spe->executable_page = executable_page; // probably needs to be changed to enum
   spe->in_swap = false;
+  spe->pin = false;
+  spe->access = false;
   spe->page_read_bytes = -1;
   spe->exec_ofs = -1;
   spe->in_filesys = executable_page == true ? true : false;

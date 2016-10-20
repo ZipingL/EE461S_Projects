@@ -46,6 +46,7 @@ bool frame_less_func (const struct hash_elem *a,
     ASSERT(fte != NULL);
     fte->spe = spe;
     fte->kpe = kp;
+    //fte->spe->access = true;
     hash_insert(&frame_table,&fte->elem_frame);
     lock_release(&frame_table_lock);
     return fte;

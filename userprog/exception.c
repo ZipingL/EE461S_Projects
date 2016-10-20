@@ -160,8 +160,8 @@ page_fault (struct intr_frame *f)
   /* Why are we doing this? Well because of the way I handled tests
      that tried to access memory addresses at the kernel level, I
      forced a page fault to happen, see syscall.c for implementation*/
-//    if(!is_user_vaddr(fault_addr) && user)
-//    exit(-1);
+    if(!is_user_vaddr(fault_addr) && user)
+     exit(-1);
 
     uint8_t* uva = (uint32_t)fault_addr & (uint32_t)0xFFFFF000;
 

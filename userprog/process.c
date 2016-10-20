@@ -269,6 +269,15 @@ process_exit (int exit_status)
 
      }
 
+     // GO through the supplemental page table and free each entry
+    while(!list_empty(&cur->spt))
+     {
+       struct list_elem * e = list_pop_front(&cur->spt);
+       struct supplement_page_table_elem *spe =
+          list_entry(e, struct supplement_page_table_elem, spt_elem);
+       free(spe);
+     }
+
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -406,9 +415,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 
   /* Open executable file. */
-  lock_acquire(&open_close_lock);
+  lock_acquire(&read_write_lock);
   file = filesys_open (argv[0]);
-  lock_release(&open_close_lock);
+  lock_release(&read_write_lock);
 
 /*  if(file == NULL)
   {

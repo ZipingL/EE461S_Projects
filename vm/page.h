@@ -11,6 +11,8 @@ struct supplement_page_table_elem {
 	 // true means code page or heap
 	bool executable_page;
 	bool in_swap; // True if page was evicted into swap area
+	bool pin; // Indicates if the page shouldn't be evicted
+	bool access; // Indicates if the page has been accessed
 	int sector; // Indicates where in the swap area the page is located
 	bool in_filesys; // True if executable page was evicted
 	int page_read_bytes; // Contains number of bytes a page holds of exec file
