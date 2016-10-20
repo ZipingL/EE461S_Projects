@@ -12,14 +12,16 @@
 #include "filesys/filesys.h"
 #include "threads/synch.h"
 #include "vm/page.h"
+#include "kernel/hash.h"
 
 struct frame_table_element {
-  struct list_elem elem_frame;
-  void* kpe; // Contains where the physical memory of frame is.,
+  struct hash_elem elem_frame;
+  uint8_t* kpe; // Contains the addres in which the page
   struct supplement_page_table_elem* spe; // See process.h
 };
 
-void* frame_request(struct supplement_page_table_elem* spe);
+uint8_t* frame_request(struct supplement_page_table_elem* spe);
+struct frame_table_elem * frame_find(const void* kpe);
 
 
 #endif
