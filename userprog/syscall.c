@@ -346,9 +346,9 @@ bool remove (const char *file)
 int open (const char *file) {
 
 	struct thread* current_thread = thread_current();
-	lock_acquire(&read_write_lock);
+	//lock_acquire(&read_write_lock);
 	struct file* fp = filesys_open(file); //Again, already in filesys.c
-	lock_release(&read_write_lock);
+//	lock_release(&read_write_lock);
 	int return_fd = -1;
 	/* Now update the file descriptor table */
 	if (fp != NULL) {
@@ -473,9 +473,9 @@ bool close (int fd) {
 	struct list_elem*  return_e = list_remove (e);
 
 	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
-	lock_acquire(&read_write_lock);
+	//lock_acquire(&read_write_lock);
 	file_close(fd_element->fp);
-	lock_release(&read_write_lock);
+	//lock_release(&read_write_lock);
 	free(fd_element); // Free the element we just removed, please also see open()
 	return true;
 }

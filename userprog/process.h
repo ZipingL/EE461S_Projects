@@ -11,6 +11,10 @@ int process_wait (tid_t);
 void process_exit (int exit_status);
 void process_activate (void);
 
+// Now used in exception.c only
+bool
+install_page (void *upage, void *kpage, bool writable);
+
 // We need to access a void* pointer in two different ways
 // A union will help faciliate that
 typedef union {
@@ -46,6 +50,8 @@ struct child_list_elem {
 										// Let's us access child_data pointer without actually having to
 										// find the child thread, saves some time.
 };
+
+
 
 
 #endif /* userprog/process.h */
