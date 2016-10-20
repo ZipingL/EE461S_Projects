@@ -16,7 +16,6 @@ This is our group's repository for our EE461S class.
 
 ### TEST STATUS
 
-	pass tests/filesys/base/syn-write
 	pass tests/userprog/args-none
 	pass tests/userprog/args-single
 	pass tests/userprog/args-multiple
@@ -49,7 +48,7 @@ This is our group's repository for our EE461S class.
 	pass tests/userprog/close-bad-fd
 	pass tests/userprog/read-normal
 	pass tests/userprog/read-bad-ptr
-	pass tests/userprog/read-boundary
+	FAIL tests/userprog/read-boundary
 	pass tests/userprog/read-zero
 	pass tests/userprog/read-stdout
 	pass tests/userprog/read-bad-fd
@@ -85,11 +84,11 @@ This is our group's repository for our EE461S class.
 	FAIL tests/vm/pt-big-stk-obj
 	pass tests/vm/pt-bad-addr
 	pass tests/vm/pt-bad-read
-	pass tests/vm/pt-write-code
-	pass tests/vm/pt-write-code2
+	FAIL tests/vm/pt-write-code
+	FAIL tests/vm/pt-write-code2
 	FAIL tests/vm/pt-grow-stk-sc
 	FAIL tests/vm/page-linear
-	pass tests/vm/page-parallel
+	FAIL tests/vm/page-parallel
 	FAIL tests/vm/page-merge-seq
 	FAIL tests/vm/page-merge-par
 	FAIL tests/vm/page-merge-stk
@@ -123,10 +122,11 @@ This is our group's repository for our EE461S class.
 	pass tests/filesys/base/sm-random
 	pass tests/filesys/base/sm-seq-block
 	pass tests/filesys/base/sm-seq-random
-	pass tests/filesys/base/syn-read
+	FAIL tests/filesys/base/syn-read
 	pass tests/filesys/base/syn-remove
-	pass tests/filesys/base/syn-write
-	26 of 109 tests failed.
+	FAIL tests/filesys/base/syn-write
+	32 of 109 tests failed.
+
 
 ## Project 2: User Programs
 - Writing the wiki page to document the project. Still need to finish [implementation details](https://github.com/ZipingL/EE461S_Projects/wiki/Project-2:-Implementation-Details).
