@@ -26,6 +26,10 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int parse_command_string(char* command, char* argv[], bool set_first_only);
+struct supplement_page_table_elem* page_add_supplemental_elem(struct list* spt, struct thread* t, uint8_t* vaddr, bool executable_page);
+bool page_supplemental_entry_remove(void* uva);
+uint8_t* frame_request(struct supplement_page_table_elem* spe);
+struct frame_table_elem * frame_find(const void* kpe);
 
 /* Take in Command String and parse it into words
    Returns the Number of arguments processed

@@ -9,6 +9,8 @@
 #include "devices/block.h"
 #include "userprog/syscall.h"
 #include "userprog/process.h"
+#include "vm/stack.h"
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -131,6 +133,7 @@ page_fault (struct intr_frame *f)
   bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
 
+  //stack_growth(thread_current()->stack, not_present, write, user, fault_addr);
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
      data.  It is not necessarily the address of the instruction
