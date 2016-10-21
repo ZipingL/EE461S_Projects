@@ -241,8 +241,10 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 
 		default:
 		{
+      // Keep in mind there are two syscalls  we have not implmemetned
+      // we don't need a printf statment to tell us that though
 			//#ifdef PROJECT2_DEBUG
-			printf("DID NOT IMPLEMENT THIS SYSCALL ERROR, number:%d\n", system_call_number);
+		//printf("DID NOT IMPLEMENT THIS SYSCALL ERROR, number:%d\n", system_call_number);
 			//#endif
 			break;
 		}
@@ -346,9 +348,9 @@ bool remove (const char *file)
 int open (const char *file) {
 
 	struct thread* current_thread = thread_current();
-	//lock_acquire(&read_write_lock);
+	lock_acquire(&open_close_lock);
 	struct file* fp = filesys_open(file); //Again, already in filesys.c
-//	lock_release(&read_write_lock);
+  lock_release(&open_close_lock);
 	int return_fd = -1;
 	/* Now update the file descriptor table */
 	if (fp != NULL) {
@@ -374,7 +376,13 @@ int read (int fd, void *buffer, unsigned size)
 		int i = 0;
 		for(i = 0; i < size; i++)
 		{
+      if(!lock_held_by_current_thread(&read_write_lock))
+      lock_acquire(&read_write_lock);
+
 			((char*) buffer) [i] = input_getc();
+      if(lock_held_by_current_thread(&read_write_lock))
+      lock_release(&read_write_lock);
+
 		}
 		return_size = size;
 
@@ -389,9 +397,14 @@ int read (int fd, void *buffer, unsigned size)
 				goto read_done;
 			}
 		struct fd_list_element *fd_element = list_entry(e, struct fd_list_element, elem_fd);
-			lock_acquire(&read_write_lock);
 
+    if(lock_held_by_current_thread(&read_write_lock))
+    {
+      printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
+      lock_acquire(&read_write_lock);
+    }
 		return_size = file_read (fd_element->fp, buffer, size) ;
+    if(lock_held_by_current_thread(&read_write_lock))
 			lock_release(&read_write_lock);
 
 	}
@@ -418,7 +431,11 @@ int write (int fd, const void *buffer, unsigned size) { //Already done in file.c
 
 	if (fd == 1) //
 	{
+    lock_acquire(&read_write_lock);
+
 		putbuf(buffer, size);
+    lock_release(&read_write_lock);
+
 		return_size = size;
 	}
 
@@ -473,9 +490,9 @@ bool close (int fd) {
 	struct list_elem*  return_e = list_remove (e);
 
 	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
-	//lock_acquire(&read_write_lock);
+	lock_acquire(&open_close_lock);
 	file_close(fd_element->fp);
-	//lock_release(&read_write_lock);
+	lock_release(&open_close_lock);
 	free(fd_element); // Free the element we just removed, please also see open()
 	return true;
 }

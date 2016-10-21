@@ -12,7 +12,7 @@
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
-static void kill (struct intr_frame *);
+static void kill (struct intr_frame *, struct supplement_page_table_elem *);
 static void page_fault (struct intr_frame *);
 
 /* Registers handlers for interrupts that can be caused by user
@@ -73,8 +73,12 @@ exception_print_stats (void)
 
 /* Handler for an exception (probably) caused by a user process. */
 static void
-kill (struct intr_frame *f)
+kill (struct intr_frame *f, struct supplement_page_table_elem *spe)
 {
+  printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
+  spe->executable_page == true ? "is executable_page" : "not exectuable_page",
+  spe->in_filesys == true ? "in filesys" : spe->in_swap == true ? "in swap" : "in frame",
+  spe->access == true ? "accessed before" : "never accessed");
   /* This interrupt is one (probably) caused by a user process.
      For example, the process might have tried to access unmapped
      virtual memory (a page fault).  For now, we simply kill the
@@ -93,7 +97,7 @@ kill (struct intr_frame *f)
       printf ("%s: dying due to interrupt %#04x (%s).\n",
               thread_name (), f->vec_no, intr_name (f->vec_no));
       intr_dump_frame (f);
-      thread_exit ();
+      exit (-1);
 
     case SEL_KCSEG:
       /* Kernel's code segment, which indicates a kernel bug.
@@ -108,7 +112,7 @@ kill (struct intr_frame *f)
          kernel. */
       printf ("Interrupt %#04x (%s) in unknown segment %04x\n",
              f->vec_no, intr_name (f->vec_no), f->cs);
-      thread_exit ();
+      exit(-1);
     }
 }
 
@@ -160,8 +164,9 @@ page_fault (struct intr_frame *f)
   /* Why are we doing this? Well because of the way I handled tests
      that tried to access memory addresses at the kernel level, I
      forced a page fault to happen, see syscall.c for implementation*/
-    if(!is_user_vaddr(fault_addr) && user)
+  if(!is_user_vaddr(fault_addr))
      exit(-1);
+
 
     uint8_t* uva = (uint32_t)fault_addr & (uint32_t)0xFFFFF000;
 
@@ -171,6 +176,40 @@ page_fault (struct intr_frame *f)
     {
       exit(-1);
     }
+
+    // Here we do access checks
+
+    // Exit if user tries to write to page that contains code
+    // Note that the user can read the code page
+    // What do the checks (the if statment) mean?
+    // Explained In Order
+    // Check if its a user doing it
+    // CHeck if the page is truly code page
+    // Check if the user was trying the write to it
+    // Check if the page is loaded in frame, meaning
+    // A user canwrite to a code page, if and only if
+    // its the case such that we are actually trying to write in the code
+    // into the page.
+    // We do not want the user to write to the code page,
+    // if there is no reason to. Plus, it lets us pass the tests
+    // that tries to do so.
+/*    if( spe->executable_page == true && write && user )
+    {
+      // If this fails, then something is wrong!
+      //printf("spe->in_filesys %d\n%s\n", spe->in_filesys, spe->t->full_name);
+      printf ("fakePage fault at %p: %s error %s page in %s context.\n",
+              fault_addr,
+              not_present ? "not present" : "rights violation",
+              write ? "writing" : "reading",
+              user ? "user" : "kernel");
+
+              printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
+              spe->executable_page == true ? "is executable_page" : "not exectuable_page",
+              spe->in_filesys == true ? "in filesys" : spe->in_swap == true ? "in swap" : "in frame",
+              spe->access == true ? "accessed before" : "never accessed");
+      exit(-1);
+    }*/
+
 
 
   /* TODO: now that you have the Supplementale
@@ -242,10 +281,16 @@ page_fault (struct intr_frame *f)
      // We won't delete this, since when we see this print we will know
      // there is something we haven't added into this function
      // that needs to be added
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
+
+
+
+
+  printf ("Page fault at %p: %s error %s page in %s context.\n Page Info:\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
           user ? "user" : "kernel");
-  kill (f);
+
+
+  kill(f, spe);
 }

@@ -12,7 +12,7 @@ struct supplement_page_table_elem {
 	bool executable_page;
 	bool in_swap; // True if page was evicted into swap area
 	bool pin; // Indicates if the page shouldn't be evicted
-	bool access; // Indicates if the page has been accessed
+	bool access; // Indicates if the page has been accessed (put in a frame before)
 	int sector; // Indicates where in the swap area the page is located
 	bool in_filesys; // True if executable page was evicted
 	int page_read_bytes; // Contains number of bytes a page holds of exec file
