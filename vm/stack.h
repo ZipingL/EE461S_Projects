@@ -8,4 +8,6 @@
 #include "vm/page.h"
 #include "vm/frame.h"
 
-void stack_growth(void **esp, bool present, bool access, bool accessor, void* address);
+#define MAX_STACK_SIZE 0x800000
+
+void stack_growth(void *esp, bool present, bool access, bool accessor, void* address);
