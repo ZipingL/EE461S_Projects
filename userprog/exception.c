@@ -6,6 +6,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "vm/page.h"
+#include "vm/stack.h"
 #include "devices/block.h"
 #include "userprog/syscall.h"
 #include "userprog/process.h"
@@ -87,10 +88,11 @@ exception_print_stats (void)
 static void
 kill (struct intr_frame *f, struct supplement_page_table_elem *spe)
 {
+  /*
   printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
   spe->executable_page == true ? "is executable_page" : "not exectuable_page",
   spe->in_filesys == true ? "in filesys" : spe->in_swap == true ? "in swap" : "in frame",
-  spe->access == true ? "accessed before" : "never accessed");
+  spe->access == true ? "accessed before" : "never accessed");*/
   /* This interrupt is one (probably) caused by a user process.
      For example, the process might have tried to access unmapped
      virtual memory (a page fault).  For now, we simply kill the
@@ -280,7 +282,15 @@ page_fault (struct intr_frame *f)
 
    // We know the page that faulted is for a stack
    else {
-     printf("stacktime\n");
+     //printf("stacktime\n");
+
+     // We know that the stack doesn't even exist
+     // thus It was not swapped out
+     if(spe == NULL)
+     {
+       stack_growth(thread_current()->stack, not_present, write, user, fault_addr);
+       return;
+     }
      // This may or may not need to be here
      ASSERT(spe->sector != -1);
      // You need to utilize the in_swap variable when impelemnting eviction/swap for stack
@@ -299,11 +309,11 @@ page_fault (struct intr_frame *f)
 
 
 
-  printf ("Page fault at %p: %s error %s page in %s context.\n Page Info:\n",
+/*  printf ("Page fault at %p: %s error %s page in %s context.\n Page Info:\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
-          user ? "user" : "kernel");
+          user ? "user" : "kernel"); */
 
 
   kill(f, spe);
