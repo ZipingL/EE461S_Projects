@@ -9,11 +9,23 @@
 #include "devices/block.h"
 #include "userprog/syscall.h"
 #include "userprog/process.h"
+#define STACK_SIZE 8388608
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
 static void kill (struct intr_frame *, struct supplement_page_table_elem *);
 static void page_fault (struct intr_frame *);
+
+
+bool exception_check_if_stack(uint8_t * fault_addr)
+{
+  //printf("hello3%d\n", ((int) PHYS_BASE) - (int) fault_addr);
+  if(( ((int) PHYS_BASE) - (int) fault_addr) <
+            ( (uint32_t ) STACK_SIZE))
+            return true;
+  else
+  return false;
+}
 
 /* Registers handlers for interrupts that can be caused by user
    programs.
@@ -164,15 +176,16 @@ page_fault (struct intr_frame *f)
   /* Why are we doing this? Well because of the way I handled tests
      that tried to access memory addresses at the kernel level, I
      forced a page fault to happen, see syscall.c for implementation*/
-  if(!is_user_vaddr(fault_addr))
+  if(!is_user_vaddr(fault_addr) && user)
+  {
      exit(-1);
-
+   }
 
     uint8_t* uva = (uint32_t)fault_addr & (uint32_t)0xFFFFF000;
 
     struct supplement_page_table_elem* spe =
     page_find_spe(uva);
-    if(spe == NULL)
+    if(spe == NULL && !exception_check_if_stack(fault_addr))
     {
       exit(-1);
     }
@@ -224,7 +237,7 @@ page_fault (struct intr_frame *f)
    //struct block* swap = block_get_role(BLOCK_SWAP);
 
    // We know the page that faulted was for code/heap
-   if(spe->executable_page)
+   if(spe != NULL && spe->executable_page)
    {
      // Need to utilize in_filesys and in_swap when Implementing
      // eviction! OR ELSE assertion will FAIL
@@ -267,6 +280,7 @@ page_fault (struct intr_frame *f)
 
    // We know the page that faulted is for a stack
    else {
+     printf("stacktime\n");
      // This may or may not need to be here
      ASSERT(spe->sector != -1);
      // You need to utilize the in_swap variable when impelemnting eviction/swap for stack

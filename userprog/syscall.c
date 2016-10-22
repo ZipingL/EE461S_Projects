@@ -54,7 +54,9 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 	//	exit(-1, f);
 	//Check for valid esp read access
 	if(get_user((char*) f->esp) == -1)
+  {
 		exit(-1, f);
+  }
 
 	//Assume that the esp pointer goes to the top of the stack (looks at return address)
 	uint32_t system_call_number = * (uint32_t**)(f->esp+0); //Create a pointer to the top of the stack (looks at argv[0])
