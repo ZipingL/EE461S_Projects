@@ -1,3 +1,4 @@
+#ifndef VM_STACK_H
 #include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>
@@ -11,3 +12,4 @@
 #define MAX_STACK_SIZE 0x800000
 
 void stack_growth(void *esp, bool present, bool access, bool accessor, void* address);
+#endif

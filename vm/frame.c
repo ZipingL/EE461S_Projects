@@ -41,11 +41,17 @@ bool frame_less_func (const struct hash_elem *a,
   void* frame_table_insert(struct supplement_page_table_elem* spe, uint8_t* kp)
   {
     // TODO: Check if already inserted
-    lock_acquire(&frame_table_lock);
     struct frame_table_element* fte = malloc(sizeof(struct frame_table_element));
     ASSERT(fte != NULL);
     fte->spe = spe;
     fte->kpe = kp;
+    if(spe!=NULL)
+    {
+      if(spe -> executable_page == true)
+        fte->spe->in_filesys = false;
+      fte->spe->access = true;
+    }
+    lock_acquire(&frame_table_lock);
     hash_insert(&frame_table,&fte->elem_frame);
     lock_release(&frame_table_lock);
     return fte;
@@ -103,6 +109,7 @@ uint8_t* frame_request(struct supplement_page_table_elem* spe){
     lock_release(&frame_table_lock);
     return NULL;
 }
+
 
 // Returns the frame table element associated with
 // a given physical frame address

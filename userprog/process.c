@@ -89,7 +89,7 @@ process_execute (const char *file_name)
   parse_command_string(file_name_no_args, argv, true);
   struct child_list_elem* success = NULL;
 
-  //ock_acquire(&open_close_lock);
+  lock_acquire(&open_close_lock);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (argv[0], PRI_DEFAULT, start_process, fn_copy);
 
@@ -116,7 +116,7 @@ process_execute (const char *file_name)
   sema_init(&sema,0);
 
   success->load_status = &sema; //Done in syscall.c instead
-  //lock_release(&open_close_lock);
+  lock_release(&open_close_lock);
   sema_down(&sema);
 
   if(success->mom_im_out_of_money)
@@ -240,10 +240,10 @@ process_exit (int exit_status)
        free(element);
      }
   // Now free the file pointer to the code the user program ran on
-  //lock_acquire(&open_close_lock);
+  lock_acquire(&open_close_lock);
   if(cur->exec_fp != NULL)
   file_close(cur->exec_fp);
-//  lock_release(&open_close_lock);
+  lock_release(&open_close_lock);
   printf ("%s: exit(%d)\n", cur->full_name, exit_status);
 
   // No need to report the exit status if the parent is dead,
@@ -271,6 +271,15 @@ process_exit (int exit_status)
        *child_element->inception = NULL; // Tells any living children that the parent has died, so need to to report exit status to parent, see process_exit()
        free(child_element);
 
+     }
+
+     // GO through the supplemental page table and free each entry
+    while(!list_empty(&cur->spt))
+     {
+       struct list_elem * e = list_pop_front(&cur->spt);
+       struct supplement_page_table_elem *spe =
+          list_entry(e, struct supplement_page_table_elem, spt_elem);
+       free(spe);
      }
 
 
@@ -459,8 +468,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
     {
       struct Elf32_Phdr phdr;
 
+      lock_acquire(&read_write_lock);
       if (file_ofs < 0 || file_ofs > file_length (file))
+      {
+        lock_release(&read_write_lock);
         goto done;
+      }
+      lock_release(&read_write_lock);
       lock_acquire(&read_write_lock);
       file_seek (file, file_ofs);
       lock_release(&read_write_lock);
@@ -534,7 +548,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
  done:
   /* We arrive here whether the load is successful or not. */
 
-//lock_acquire(&open_close_lock);
+//ock_acquire(&open_close_lock);
  if(!success)
  {
 /*
@@ -546,10 +560,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   else
   {
       t->exec_fp = file;
+
+        lock_acquire(&read_write_lock);
         file_deny_write(file);
+        lock_release(&read_write_lock);
+
   }
-// lock_release(&open_close_lock);
- //lock_release(&read_write_lock);
+//  lock_release(&open_close_lock);
   //printf("Sucess %d, level %d\n", success, done_level);
   return success;
 }
@@ -643,6 +660,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       spe->writable = writable;
       spe->exec_ofs = ofs;
       spe->exec_fp = file;
+      spe->in_filesys = true; // by default, all code related pages are not actually..
+      //.. put in frames, they are actually loaded in frames by page fault handler. See below:
+
       // Now commented code below is done in page_fault handler!
       /* Get a page of memory. */
       /*
