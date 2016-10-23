@@ -13,7 +13,7 @@
 #define STACK_SIZE 8388608
 /* Number of page faults processed. */
 static long long page_fault_cnt;
-
+struct lock page_load_lock;
 static void kill (struct intr_frame *, struct supplement_page_table_elem *);
 static void page_fault (struct intr_frame *);
 
@@ -46,6 +46,7 @@ bool exception_check_if_stack(uint8_t * fault_addr)
 void
 exception_init (void)
 {
+  lock_init(&page_load_lock);
   /* These exceptions can be raised explicitly by a user program,
      e.g. via the INT, INT3, INTO, and BOUND instructions.  Thus,
      we set DPL==3, meaning that user programs are allowed to
@@ -88,11 +89,11 @@ exception_print_stats (void)
 static void
 kill (struct intr_frame *f, struct supplement_page_table_elem *spe)
 {
-  /*
+
   printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
   spe->executable_page == true ? "is executable_page" : "not exectuable_page",
   spe->in_filesys == true ? "in filesys" : spe->in_swap == true ? "in swap" : "in frame",
-  spe->access == true ? "accessed before" : "never accessed");*/
+  spe->access == true ? "accessed before" : "never accessed");
   /* This interrupt is one (probably) caused by a user process.
      For example, the process might have tried to access unmapped
      virtual memory (a page fault).  For now, we simply kill the
@@ -178,7 +179,7 @@ page_fault (struct intr_frame *f)
   /* Why are we doing this? Well because of the way I handled tests
      that tried to access memory addresses at the kernel level, I
      forced a page fault to happen, see syscall.c for implementation*/
-  if(!is_user_vaddr(fault_addr) && user)
+  if(!is_user_vaddr(fault_addr))
   {
      exit(-1);
    }
@@ -256,25 +257,32 @@ page_fault (struct intr_frame *f)
        ASSERT(spe->exec_fp != NULL);
        ASSERT(spe->page_read_bytes != -1);
        ASSERT(spe->exec_ofs != -1);
-       lock_acquire(&read_write_lock);
+
+       bool lock_status = false;
+      // if(!lock_held_by_current_thread(&read_write_lock))
+    //   {
+         lock_status = true;
+       lock_acquire(&page_load_lock);
+  //   }
+
        ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
-       lock_release(&read_write_lock);
+//if(lock_status)
+      lock_release(&page_load_lock);
        memset (kp + spe->page_read_bytes, 0, spe->page_zero_bytes);
        // Install the page to the page directory only if it was missing (not_present == TRUE),
        // if its missing it means the page faulted because the page for the code
        // has not been loaded up yet, it did not fault because the page was swapped
        // out, which would mean install_page has already been done!
-       if(not_present) ASSERT(install_page(spe->vaddr, kp, spe->writable));
+       install_page(spe->vaddr, kp, spe->writable);
        return;
      }
      // TODO: IMPLEMENT EVICTION! All frames are used up! Need to evict one!
      else if(spe->in_filesys == true && kp == NULL)
      {
-       // This may or may not need to be here
-       ASSERT(spe->sector == -1);
-       // This needs to be done at the end when eviction is implemented: See code block above
-       // if(not_present) ASSERT(install_page(spe->vaddr, kp, spe->writable));
-       // return;
+       kp = frame_swap_for_new(spe);
+       lock_acquire(&page_load_lock);
+       ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
+       lock_release(&page_load_lock);
      }
 
 
@@ -291,11 +299,15 @@ page_fault (struct intr_frame *f)
        stack_growth(thread_current()->stack, not_present, write, user, fault_addr);
        return;
      }
+     else {
      // This may or may not need to be here
      ASSERT(spe->sector != -1);
      // You need to utilize the in_swap variable when impelemnting eviction/swap for stack
      ASSERT(spe->in_swap != false);
-     // TODO: Handle a swap for stack
+     // Handle a swap for stack that had been swapped
+    frame_swap_for_swapped(spe);
+
+   }
    }
 
 

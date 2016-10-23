@@ -412,7 +412,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL)
     goto done;
   process_activate ();
+  bool lock_status = false;
 
+  //if(!lock_held_by_current_thread(&read_write_lock))
+  //{
+  //  lock_status = true;
+  lock_acquire(&read_write_lock);
+//}
 
   /* Open executable file. */
   lock_acquire(&open_close_lock);
@@ -441,7 +447,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done;
     }
 
-  lock_acquire(&read_write_lock);
+  //lock_acquire(&read_write_lock);
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -452,11 +458,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phnum > 1024)
     {
       printf ("load: %s: error loading executable\n", argv[0]);
-        lock_release(&read_write_lock);
+      //  lock_release(&read_write_lock);
       goto done;
     }
 
-     lock_release(&read_write_lock);
+    // lock_release(&read_write_lock);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -464,19 +470,19 @@ load (const char *file_name, void (**eip) (void), void **esp)
     {
       struct Elf32_Phdr phdr;
 
-      lock_acquire(&read_write_lock);
+    //  lock_acquire(&read_write_lock);
       if (file_ofs < 0 || file_ofs > file_length (file))
       {
-        lock_release(&read_write_lock);
+    //    lock_release(&read_write_lock);
         goto done;
       }
-      lock_release(&read_write_lock);
-      lock_acquire(&read_write_lock);
+//      lock_release(&read_write_lock);
+    //  lock_acquire(&read_write_lock);
       file_seek (file, file_ofs);
-      lock_release(&read_write_lock);
-      lock_acquire(&read_write_lock);
+  //    lock_release(&read_write_lock);
+    //  lock_acquire(&read_write_lock);
       int r = file_read (file, &phdr, sizeof phdr);
-      lock_release(&read_write_lock);
+    //  lock_release(&read_write_lock);
       if (r != sizeof phdr)
         goto done;
       file_ofs += sizeof phdr;
@@ -557,13 +563,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
   {
       t->exec_fp = file;
 
-        lock_acquire(&read_write_lock);
+        //lock_acquire(&read_write_lock);
         file_deny_write(file);
-        lock_release(&read_write_lock);
+      //  lock_release(&read_write_lock);
 
   }
 //  lock_release(&open_close_lock);
   //printf("Sucess %d, level %d\n", success, done_level);
+
+//if(lock_status)
+  lock_release(&read_write_lock);
   return success;
 }
 /* load() helpers. */
@@ -725,7 +734,7 @@ setup_stack (void **esp, char* file_name)
   struct thread *t = thread_current();
   struct supplement_page_table_elem* spe = page_add_supplemental_elem(&t->spt, t,
                                             uva, false);
-
+  spe->writable = true;
   kpage = frame_request(spe);
   if (kpage != NULL)
     {

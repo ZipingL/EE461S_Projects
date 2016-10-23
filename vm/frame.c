@@ -6,6 +6,8 @@
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
 #include "vm/frame.h"
+#include "vm/swap.h"
+#include "vm/page.h"
 
 struct hash frame_table;
 struct lock frame_table_lock;
@@ -138,5 +140,68 @@ bool frame_free(const void* kpe)
   return true;
 
 }
+
+//Finds a frame to swap
+struct frame_table_elem* frame_find_swappable_frame()
+{
+  lock_acquire(&frame_table_lock);
+
+  // simulate a circular buffer
+  while(true)
+  {
+    struct hash_iterator i;
+    hash_first(&i, &frame_table);
+    while(hash_next(&i))
+    {
+      struct frame_table_element * fte = hash_entry(hash_cur (&i),
+                                struct  frame_table_element, elem_frame);
+      ASSERT(fte->kpe != NULL);
+      if(!pagedir_is_accessed(fte->spe->t->pagedir, fte->spe->vaddr))
+      {
+        lock_release(&frame_table_lock);
+        return fte;
+      }
+      else{
+        pagedir_set_accessed(fte->spe->t->pagedir, fte->spe->vaddr, false);
+      }
+    } // end while(has_next)
+  } // end while()
+
+  lock_release(&frame_table_lock);
+}
+
+// Evict the page in the frame
+// And put in the new one, meaning, this was a newly made page
+// not one that had been swapped out
+// it's frame_request, but gives you a frame address
+// that had a page in it, but the page is evicted
+uint8_t* frame_swap_for_new(
+  struct supplement_page_table_elem* new_page)
+  {
+    struct frame_table_elem* fte_swap =  frame_find_swappable_frame();
+
+    uint8_t* kp   = swap_frame(fte_swap, new_page);
+
+    install_page(new_page->t->pagedir, new_page->vaddr, new_page->writable);
+    return kp;
+  }
+
+
+// Evict the page in the frame
+// And put in the swapped out page
+// We assume the page that needs the frame
+// was a swapped out frame
+// Returns the frame address
+uint8_t* frame_swap_for_swapped(
+  struct supplement_page_table_elem* swapped_page)
+  {
+    struct frame_table_elem* fte_swap =  frame_find_swappable_frame();
+
+    uint8_t* kp   = swap_frame(fte_swap, swapped_page);
+
+    pagedir_set_page(swapped_page->t->pagedir, swapped_page->vaddr, kp, swapped_page->writable);
+    return kp;
+  }
+
 
 // TODO: Write Frame Table Destructor

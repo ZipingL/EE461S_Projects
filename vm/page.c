@@ -31,6 +31,7 @@ struct supplement_page_table_elem* page_add_supplemental_elem
   spe->in_filesys = executable_page == true ? true : false;
   spe->exec_fp = NULL;
   spe->sector = -1;
+  spe->writable = false;
   list_push_back(spt, &spe->spt_elem);
   return spe;
 }

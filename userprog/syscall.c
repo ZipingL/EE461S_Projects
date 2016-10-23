@@ -41,7 +41,6 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 
 
 
-
 	// check for valid esp pointer (esp < PHYS_BASE)
 	if( !is_user_vaddr( f->esp))
 		exit(-1, f);
@@ -285,6 +284,7 @@ void halt (void) {
 
 void exit (int status, struct intr_frame *f) {
 
+
 	if(f!=NULL)
 		f->eax = status; //Save the status that was returned by the existing process to the stack
 
@@ -350,9 +350,9 @@ bool remove (const char *file)
 int open (const char *file) {
 
 	struct thread* current_thread = thread_current();
-	lock_acquire(&open_close_lock);
+	lock_acquire(&read_write_lock);
 	struct file* fp = filesys_open(file); //Again, already in filesys.c
-  lock_release(&open_close_lock);
+  lock_release(&read_write_lock);
 	int return_fd = -1;
 	/* Now update the file descriptor table */
 	if (fp != NULL) {
@@ -378,11 +378,11 @@ int read (int fd, void *buffer, unsigned size)
 		int i = 0;
 		for(i = 0; i < size; i++)
 		{
-      if(!lock_held_by_current_thread(&read_write_lock))
+      //if(!lock_held_by_current_thread(&read_write_lock))
       lock_acquire(&read_write_lock);
 
 			((char*) buffer) [i] = input_getc();
-      if(lock_held_by_current_thread(&read_write_lock))
+      //if(lock_held_by_current_thread(&read_write_lock))
       lock_release(&read_write_lock);
 
 		}
@@ -400,13 +400,13 @@ int read (int fd, void *buffer, unsigned size)
 			}
 		struct fd_list_element *fd_element = list_entry(e, struct fd_list_element, elem_fd);
 
-    if(lock_held_by_current_thread(&read_write_lock))
-    {
-      printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
+    //if(lock_held_by_current_thread(&read_write_lock))
+    //{
+      //printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
       lock_acquire(&read_write_lock);
-    }
+    //}
 		return_size = file_read (fd_element->fp, buffer, size) ;
-    if(lock_held_by_current_thread(&read_write_lock))
+    //if(lock_held_by_current_thread(&read_write_lock))
 			lock_release(&read_write_lock);
 
 	}
@@ -446,8 +446,8 @@ int write (int fd, const void *buffer, unsigned size) { //Already done in file.c
 		if(e == NULL)
 			goto write_done; // return error if file not found
 		struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
-				lock_acquire(&read_write_lock);
 
+        lock_acquire(&read_write_lock);
 		return_size = file_write (fd_element->fp, buffer, size) ;
 			lock_release(&read_write_lock);
 
@@ -467,7 +467,9 @@ bool seek (int fd, unsigned position)
 	struct list_elem* e = find_fd_element(fd, current_thread);
 	if(e == NULL) return false; //is this needed?
 	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
-	file_seek(fd_element->fp, position);
+lock_acquire(&read_write_lock);
+  file_seek(fd_element->fp, position);
+  lock_release(&read_write_lock);
 	return true;
 
 }
@@ -492,9 +494,9 @@ bool close (int fd) {
 	struct list_elem*  return_e = list_remove (e);
 
 	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
-	lock_acquire(&open_close_lock);
+	lock_acquire(&read_write_lock);
 	file_close(fd_element->fp);
-	lock_release(&open_close_lock);
+	lock_release(&read_write_lock);
 	free(fd_element); // Free the element we just removed, please also see open()
 	return true;
 }

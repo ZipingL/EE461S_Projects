@@ -39,6 +39,7 @@
 #endif
 
 #include "vm/frame.h"
+#include "vm/swap.h"
 
 /* Page directory with kernel mappings only. */
 uint32_t *init_page_dir;
@@ -51,6 +52,7 @@ static bool format_filesys;
    overriding the defaults. */
 static const char *filesys_bdev_name;
 static const char *scratch_bdev_name;
+
 #ifdef VM
 static const char *swap_bdev_name;
 #endif
@@ -117,8 +119,6 @@ main (void)
   syscall_init ();
 #endif
 
-  /* Initial stuff for virtual memory implementation*/
-  frame_intitialization();
 
   /* Start thread scheduler and enable interrupts. */
   thread_start ();
@@ -131,6 +131,10 @@ main (void)
   locate_block_devices ();
   filesys_init (format_filesys);
 #endif
+
+/* Initialize stuff for virtual memory implementation*/
+frame_intitialization();
+swap_init();
 
   printf ("Boot complete.\n");
 
