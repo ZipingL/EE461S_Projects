@@ -104,6 +104,7 @@ uint8_t* frame_request(struct supplement_page_table_elem* spe){
       if(fte->spe == NULL)
       {
         fte->spe = spe;
+        fte->spe->kpe = fte->kpe;
         lock_release(&frame_table_lock);
         return fte->kpe;
       }
@@ -117,6 +118,7 @@ uint8_t* frame_request(struct supplement_page_table_elem* spe){
 // a given physical frame address
 struct frame_table_elem * frame_find(const void* kpe)
 {
+  if(kpe == NULL) return NULL;
   lock_acquire(&frame_table_lock);
 
   struct frame_table_element fte;
@@ -202,6 +204,8 @@ uint8_t* frame_swap_for_swapped(
     pagedir_set_page(swapped_page->t->pagedir, swapped_page->vaddr, kp, swapped_page->writable);
     return kp;
   }
+
+
 
 
 // TODO: Write Frame Table Destructor

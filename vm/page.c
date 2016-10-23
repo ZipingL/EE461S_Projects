@@ -32,6 +32,7 @@ struct supplement_page_table_elem* page_add_supplemental_elem
   spe->exec_fp = NULL;
   spe->sector = -1;
   spe->writable = false;
+  spe->kpe = NULL;
   list_push_back(spt, &spe->spt_elem);
   return spe;
 }

@@ -106,6 +106,7 @@ struct thread
    bool load_failed;
    struct child_list_elem *child_data; //Child can update its status for parent to see
    struct list spt; // supplemental page table!
+   uint8_t* esp;
 #endif
 
     /* Owned by thread.c. */

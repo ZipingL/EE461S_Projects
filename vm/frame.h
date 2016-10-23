@@ -22,6 +22,7 @@ struct frame_table_element {
 
 uint8_t* frame_request(struct supplement_page_table_elem* spe);
 struct frame_table_elem * frame_find(const void* kpe);
+bool frame_free(const void* kpe);
 
 
 #endif

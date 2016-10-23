@@ -12,5 +12,5 @@
 
 #define MAX_STACK_SIZE 0x800000
 
-void stack_growth(void *esp, bool present, bool access, bool accessor, void* address);
+void stack_growth(struct intr_frame *f, bool present, bool access, bool accessor, void* address);
 #endif

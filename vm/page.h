@@ -21,6 +21,7 @@ struct supplement_page_table_elem {
 	bool writable;
 	struct file * exec_fp; // Holds the executable file, set in page.c->page_find_spe()
 	struct thread * t; // Holds the thread that owns the virtual page
+	uint8_t* kpe; // Holds the kernel vritual addr, or frame addr
 };
 
 struct supplement_page_table_elem* page_find_spe(

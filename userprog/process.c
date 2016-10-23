@@ -250,8 +250,6 @@ process_exit (int exit_status)
   {
     cur->child_data->status = PROCESS_DONE;
     cur->child_data->exit_status = exit_status;
-    struct semaphore * child_sema = cur->child_data->sema;
-    sema_up(child_sema); // notify waiting parent that the child is done
 
   }
   uint32_t *pd;
@@ -275,6 +273,10 @@ process_exit (int exit_status)
        struct list_elem * e = list_pop_front(&cur->spt);
        struct supplement_page_table_elem *spe =
           list_entry(e, struct supplement_page_table_elem, spt_elem);
+
+       struct frame_table_element * fte = frame_find(spe->kpe);
+    //   if(fte!= NULL && fte->spe == spe && spe->in_swap == false && spe->in_filesys == false)
+    //    frame_free(fte->kpe);
        free(spe);
      }
 
@@ -295,6 +297,9 @@ process_exit (int exit_status)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
+    struct semaphore * child_sema = cur->child_data->sema;
+
+    sema_up(child_sema); // notify waiting parent that the child is done
 
 
 }
@@ -421,9 +426,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 //}
 
   /* Open executable file. */
-  lock_acquire(&open_close_lock);
+  //lock_acquire(&open_close_lock);
   file = filesys_open (argv[0]);
-  lock_release(&open_close_lock);
+  //lock_release(&open_close_lock);
 
 /*  if(file == NULL)
   {
@@ -808,7 +813,12 @@ setup_stack (void **esp, char* file_name)
         printf("%s %s %s\n", esp_arg_ptrs[0], esp_arg_ptrs[1], esp_arg_ptrs[2]);
         printf("%s %s %s \n", *((char**)(*(unioned_esp.p_word + 2))+1), *(unioned_esp.p_word + 4), *(unioned_esp.p_word + 5));
         */
+
+        //printf("setup stack %p", *esp);
         *esp = unioned_esp.p_word;
+        //printf("setup stack %p", *esp);
+
+        t->esp = esp;
 
       } // end if(success)
       else

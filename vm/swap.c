@@ -56,6 +56,7 @@ uint8_t* swap_frame(struct frame_table_element* fte,
   pagedir_clear_page (fte->spe->t->pagedir, fte->spe->vaddr);
   // put in the new page into frame
   fte->spe = new_page;
+  fte->spe->kpe = fte->kpe;
 
   // write into the frame, what the swap had if necessary
   // if its an exectuable page, we do it in the page fault handler

@@ -18,10 +18,12 @@ static void kill (struct intr_frame *, struct supplement_page_table_elem *);
 static void page_fault (struct intr_frame *);
 
 
-bool exception_check_if_stack(uint8_t * fault_addr)
+bool exception_check_if_stack(uint8_t * uva, uint8_t* fault_addr)
 {
-  //printf("hello3%d\n", ((int) PHYS_BASE) - (int) fault_addr);
-  if(( ((int) PHYS_BASE) - (int) fault_addr) <
+  //printf("hello3%p\n", ((int) PHYS_BASE) - (int) fault_addr);
+  //printf("hello3%p\n", (int) fault_addr - ((int) PHYS_BASE));
+
+  if(( ((size_t) PHYS_BASE) - (size_t) uva) <=
             ( (uint32_t ) STACK_SIZE))
             return true;
   else
@@ -90,7 +92,7 @@ static void
 kill (struct intr_frame *f, struct supplement_page_table_elem *spe)
 {
 
-  printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
+  /*printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
   spe->executable_page == true ? "is executable_page" : "not exectuable_page",
   spe->in_filesys == true ? "in filesys" : spe->in_swap == true ? "in swap" : "in frame",
   spe->access == true ? "accessed before" : "never accessed");
@@ -119,7 +121,9 @@ kill (struct intr_frame *f, struct supplement_page_table_elem *spe)
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
-      intr_dump_frame (f);
+      //intr_dump_frame (f);
+      exit(-1); // Instead of panicing, we assume user simply tried to write into
+      // a code space using syscall read/write
       PANIC ("Kernel bug - unexpected interrupt in kernel");
 
     default:
@@ -159,7 +163,7 @@ page_fault (struct intr_frame *f)
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
-
+//printf("hello start\n");
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();
@@ -179,6 +183,7 @@ page_fault (struct intr_frame *f)
   /* Why are we doing this? Well because of the way I handled tests
      that tried to access memory addresses at the kernel level, I
      forced a page fault to happen, see syscall.c for implementation*/
+
   if(!is_user_vaddr(fault_addr))
   {
      exit(-1);
@@ -186,12 +191,14 @@ page_fault (struct intr_frame *f)
 
     uint8_t* uva = (uint32_t)fault_addr & (uint32_t)0xFFFFF000;
 
+
     struct supplement_page_table_elem* spe =
     page_find_spe(uva);
-    if(spe == NULL && !exception_check_if_stack(fault_addr))
+    if(spe == NULL && !exception_check_if_stack(uva,fault_addr))
     {
       exit(-1);
     }
+
 
     // Here we do access checks
 
@@ -228,6 +235,7 @@ page_fault (struct intr_frame *f)
 
 
 
+
   /* TODO: now that you have the Supplementale
    * page table entry, you can easily figure out
    * the context of the vaddr, e.g. which virtual page
@@ -240,8 +248,12 @@ page_fault (struct intr_frame *f)
    //struct block* swap = block_get_role(BLOCK_SWAP);
 
    // We know the page that faulted was for code/heap
+
+//   printf("Hello start 3\n");
    if(spe != NULL && spe->executable_page)
    {
+    // printf("Hello start 4 %p\n", fault_addr);
+
      // Need to utilize in_filesys and in_swap when Implementing
      // eviction! OR ELSE assertion will FAIL
      ASSERT(spe->in_filesys != false || spe->in_swap != false);
@@ -264,6 +276,7 @@ page_fault (struct intr_frame *f)
          lock_status = true;
        lock_acquire(&page_load_lock);
   //   }
+  //printf("Hello start 5\n");
 
        ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
 //if(lock_status)
@@ -276,14 +289,20 @@ page_fault (struct intr_frame *f)
        install_page(spe->vaddr, kp, spe->writable);
        return;
      }
+
      // TODO: IMPLEMENT EVICTION! All frames are used up! Need to evict one!
      else if(spe->in_filesys == true && kp == NULL)
      {
-       kp = frame_swap_for_new(spe);
+      // printf("Hello start 5.1 %d %d\n", spe->in_filesys, kp);
+
+       kp = frame_swap_for_swapped(spe);
+      // printf("Hello start 5.2\n");
+
        lock_acquire(&page_load_lock);
        ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
        lock_release(&page_load_lock);
      }
+     //printf("Hello start 6\n");
 
 
    }
@@ -296,7 +315,8 @@ page_fault (struct intr_frame *f)
      // thus It was not swapped out
      if(spe == NULL)
      {
-       stack_growth(thread_current()->stack, not_present, write, user, fault_addr);
+       //printf("hello %p | %p\n", f->esp, fault_addr);
+       stack_growth(f, not_present, write, user, fault_addr);
        return;
      }
      else {
@@ -321,11 +341,6 @@ page_fault (struct intr_frame *f)
 
 
 
-/*  printf ("Page fault at %p: %s error %s page in %s context.\n Page Info:\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel"); */
 
 
   kill(f, spe);

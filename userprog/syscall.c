@@ -40,7 +40,8 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 {
 
 
-
+  struct thread *t = thread_current();
+  t->esp = f->esp;
 	// check for valid esp pointer (esp < PHYS_BASE)
 	if( !is_user_vaddr( f->esp))
 		exit(-1, f);
