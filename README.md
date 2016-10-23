@@ -17,7 +17,8 @@ This is our group's repository for our EE461S class.
 - I would focus on trying the last couple of problems on the practice exam, because it really does give you a good idea of how paging works and so would really clear up your understanding before you just start writing code.
 
 ### TEST STATUS
-
+	
+	pass tests/filesys/base/syn-write
 	pass tests/userprog/args-none
 	pass tests/userprog/args-single
 	pass tests/userprog/args-multiple
@@ -50,7 +51,7 @@ This is our group's repository for our EE461S class.
 	pass tests/userprog/close-bad-fd
 	pass tests/userprog/read-normal
 	pass tests/userprog/read-bad-ptr
-	FAIL tests/userprog/read-boundary
+	pass tests/userprog/read-boundary
 	pass tests/userprog/read-zero
 	pass tests/userprog/read-stdout
 	pass tests/userprog/read-bad-fd
@@ -80,15 +81,15 @@ This is our group's repository for our EE461S class.
 	pass tests/userprog/bad-write2
 	pass tests/userprog/bad-jump
 	pass tests/userprog/bad-jump2
-	FAIL tests/vm/pt-grow-stack
-	FAIL tests/vm/pt-grow-pusha
+	pass tests/vm/pt-grow-stack
+	pass tests/vm/pt-grow-pusha
 	pass tests/vm/pt-grow-bad
-	FAIL tests/vm/pt-big-stk-obj
+	pass tests/vm/pt-big-stk-obj
 	pass tests/vm/pt-bad-addr
 	pass tests/vm/pt-bad-read
-	FAIL tests/vm/pt-write-code
-	FAIL tests/vm/pt-write-code2
-	FAIL tests/vm/pt-grow-stk-sc
+	pass tests/vm/pt-write-code
+	pass tests/vm/pt-write-code2
+	pass tests/vm/pt-grow-stk-sc
 	FAIL tests/vm/page-linear
 	FAIL tests/vm/page-parallel
 	FAIL tests/vm/page-merge-seq
@@ -113,7 +114,7 @@ This is our group's repository for our EE461S class.
 	FAIL tests/vm/mmap-over-data
 	FAIL tests/vm/mmap-over-stk
 	FAIL tests/vm/mmap-remove
-	FAIL tests/vm/mmap-zero
+	pass tests/vm/mmap-zero	
 	pass tests/filesys/base/lg-create
 	pass tests/filesys/base/lg-full
 	pass tests/filesys/base/lg-random
@@ -124,10 +125,11 @@ This is our group's repository for our EE461S class.
 	pass tests/filesys/base/sm-random
 	pass tests/filesys/base/sm-seq-block
 	pass tests/filesys/base/sm-seq-random
-	FAIL tests/filesys/base/syn-read
+	pass tests/filesys/base/syn-read
 	pass tests/filesys/base/syn-remove
-	FAIL tests/filesys/base/syn-write
-	32 of 109 tests failed.
+	pass tests/filesys/base/syn-write
+	22 of 109 tests failed.
+
 
 
 ## Project 2: User Programs
