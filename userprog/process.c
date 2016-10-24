@@ -240,6 +240,7 @@ process_exit (int exit_status)
   if(cur->exec_fp != NULL)
   file_close(cur->exec_fp);
   lock_release(&open_close_lock);
+  struct semaphore * child_sema = cur->child_data->sema;
   printf ("%s: exit(%d)\n", cur->full_name, exit_status);
 
   // No need to report the exit status if the parent is dead,
@@ -250,6 +251,7 @@ process_exit (int exit_status)
   {
     cur->child_data->status = PROCESS_DONE;
     cur->child_data->exit_status = exit_status;
+    sema_up(child_sema); // notify waiting parent that the child is done
 
   }
   uint32_t *pd;
@@ -274,7 +276,7 @@ process_exit (int exit_status)
        struct supplement_page_table_elem *spe =
           list_entry(e, struct supplement_page_table_elem, spt_elem);
 
-       struct frame_table_element * fte = frame_find(spe->kpe);
+    //   struct frame_table_element * fte = frame_find(spe->kpe);
     //   if(fte!= NULL && fte->spe == spe && spe->in_swap == false && spe->in_filesys == false)
     //    frame_free(fte->kpe);
        free(spe);
@@ -297,9 +299,7 @@ process_exit (int exit_status)
       pagedir_activate (NULL);
       pagedir_destroy (pd);
     }
-    struct semaphore * child_sema = cur->child_data->sema;
 
-    sema_up(child_sema); // notify waiting parent that the child is done
 
 
 }
@@ -740,7 +740,9 @@ setup_stack (void **esp, char* file_name)
   struct supplement_page_table_elem* spe = page_add_supplemental_elem(&t->spt, t,
                                             uva, false);
   spe->writable = true;
+  spe->pin = true;
   kpage = frame_request(spe);
+
   if (kpage != NULL)
     {
       uint8_t* uva = ((uint8_t *) PHYS_BASE) - PGSIZE;
@@ -830,6 +832,8 @@ setup_stack (void **esp, char* file_name)
     else {
       page_supplemental_entry_remove(spe->vaddr);
     }
+
+    spe->pin = false;
   return success;
 }
 

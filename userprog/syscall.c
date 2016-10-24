@@ -401,13 +401,13 @@ int read (int fd, void *buffer, unsigned size)
 			}
 		struct fd_list_element *fd_element = list_entry(e, struct fd_list_element, elem_fd);
 
-    //if(lock_held_by_current_thread(&read_write_lock))
-    //{
-      //printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
+    if(lock_held_by_current_thread(&read_write_lock))
+    {
+      printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
       lock_acquire(&read_write_lock);
-    //}
+    }
 		return_size = file_read (fd_element->fp, buffer, size) ;
-    //if(lock_held_by_current_thread(&read_write_lock))
+    if(lock_held_by_current_thread(&read_write_lock))
 			lock_release(&read_write_lock);
 
 	}
@@ -448,8 +448,13 @@ int write (int fd, const void *buffer, unsigned size) { //Already done in file.c
 			goto write_done; // return error if file not found
 		struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
 
-        lock_acquire(&read_write_lock);
+    if(lock_held_by_current_thread(&read_write_lock))
+    {
+      printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
+      lock_acquire(&read_write_lock);
+    }
 		return_size = file_write (fd_element->fp, buffer, size) ;
+    if(lock_held_by_current_thread(&read_write_lock))
 			lock_release(&read_write_lock);
 
 	}

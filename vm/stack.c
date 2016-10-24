@@ -34,6 +34,7 @@ uint8_t* esp = accessor == true ? f->esp : t->esp;
 			  kp = frame_swap_for_new(spe);
       }
       spe->in_swap = false;
+      spe->pin = false;
     //}
 	//if (present && !accessor && access) {
 	  //If a fault occurres in the kernel

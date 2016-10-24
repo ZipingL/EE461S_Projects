@@ -92,7 +92,7 @@ static void
 kill (struct intr_frame *f, struct supplement_page_table_elem *spe)
 {
 
-  /*printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
+/*  printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
   spe->executable_page == true ? "is executable_page" : "not exectuable_page",
   spe->in_filesys == true ? "in filesys" : spe->in_swap == true ? "in swap" : "in frame",
   spe->access == true ? "accessed before" : "never accessed");
@@ -183,7 +183,7 @@ page_fault (struct intr_frame *f)
   /* Why are we doing this? Well because of the way I handled tests
      that tried to access memory addresses at the kernel level, I
      forced a page fault to happen, see syscall.c for implementation*/
-
+//printf("%p\n", fault_addr);
   if(!is_user_vaddr(fault_addr))
   {
      exit(-1);
@@ -191,11 +191,13 @@ page_fault (struct intr_frame *f)
 
     uint8_t* uva = (uint32_t)fault_addr & (uint32_t)0xFFFFF000;
 
+    //printf("Hello start 3 %p %p\n", fault_addr, f->esp);
 
     struct supplement_page_table_elem* spe =
     page_find_spe(uva);
     if(spe == NULL && !exception_check_if_stack(uva,fault_addr))
     {
+
       exit(-1);
     }
 
@@ -249,11 +251,23 @@ page_fault (struct intr_frame *f)
 
    // We know the page that faulted was for code/heap
 
-//   printf("Hello start 3\n");
    if(spe != NULL && spe->executable_page)
    {
-    // printf("Hello start 4 %p\n", fault_addr);
+     spe->pin = true; // Pin the page, so that it doesn't get evicted
+     //printf("Hello start 4 %p %p %p %d %d\n", write, user, spe->access, page_fault_cnt, not_present);
+    /*printf ("fakePage fault at %p: %s error %s page in %s context.\n",
+            fault_addr,
+            not_present ? "not present" : "rights violation",
+            write ? "writing" : "reading",
+            user ? "user" : "kernel");*/
 
+        // Passing the write code tests, make sure user
+        // Does not write to the code
+        if(write && !not_present)
+        {
+
+        exit(-1);
+      }
      // Need to utilize in_filesys and in_swap when Implementing
      // eviction! OR ELSE assertion will FAIL
      ASSERT(spe->in_filesys != false || spe->in_swap != false);
@@ -261,6 +275,7 @@ page_fault (struct intr_frame *f)
      // Try to get a frame for the page that isn't in physical memory, which
      // thus is the reason why there was a page fault
      uint8_t* kp = frame_request(spe);
+     //printf("Hello start 5.1 %d %d  %p %s\n", spe->in_filesys, kp, thread_current()->name);
 
      // Load up the required code, here we know there is a frame we can use
      // for loading the code in, and thus making the page no longer fault!
@@ -274,33 +289,41 @@ page_fault (struct intr_frame *f)
       // if(!lock_held_by_current_thread(&read_write_lock))
     //   {
          lock_status = true;
-       lock_acquire(&page_load_lock);
+         spe->pin = true;
+       lock_acquire(&read_write_lock);
   //   }
   //printf("Hello start 5\n");
 
        ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
 //if(lock_status)
-      lock_release(&page_load_lock);
+      lock_release(&read_write_lock);
+
        memset (kp + spe->page_read_bytes, 0, spe->page_zero_bytes);
        // Install the page to the page directory only if it was missing (not_present == TRUE),
        // if its missing it means the page faulted because the page for the code
        // has not been loaded up yet, it did not fault because the page was swapped
        // out, which would mean install_page has already been done!
+       //printf("installation\n");
        install_page(spe->vaddr, kp, spe->writable);
+       spe->in_filesys = false;
+       //printf("bye\n");
+       spe->pin = false;
        return;
      }
 
      // TODO: IMPLEMENT EVICTION! All frames are used up! Need to evict one!
      else if(spe->in_filesys == true && kp == NULL)
      {
-      // printf("Hello start 5.1 %d %d\n", spe->in_filesys, kp);
 
        kp = frame_swap_for_swapped(spe);
       // printf("Hello start 5.2\n");
 
-       lock_acquire(&page_load_lock);
+       lock_acquire(&read_write_lock);
        ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
-       lock_release(&page_load_lock);
+       lock_release(&read_write_lock);
+       spe->in_filesys = false;
+       spe->pin = false;
+       return;
      }
      //printf("Hello start 6\n");
 
@@ -309,24 +332,36 @@ page_fault (struct intr_frame *f)
 
    // We know the page that faulted is for a stack
    else {
-     //printf("stacktime\n");
+  //  printf("stacktime\n");
 
      // We know that the stack doesn't even exist
      // thus It was not swapped out
      if(spe == NULL)
      {
-       //printf("hello %p | %p\n", f->esp, fault_addr);
+      //printf("hello %p | %p\n", f->esp, fault_addr);
        stack_growth(f, not_present, write, user, fault_addr);
        return;
      }
      else {
+       printf ("fakePage fault at %p: %s error %s page in %s context.\n",
+               fault_addr,
+               not_present ? "not present" : "rights violation",
+               write ? "writing" : "reading",
+               user ? "user" : "kernel");
+       printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
+       spe->executable_page == true ? "is executable_page" : "not exectuable_page",
+       spe->in_filesys == true ? "in filesys" : spe->in_swap == true ? "in swap" : "in frame",
+       spe->access == true ? "accessed before" : "never accessed");
+       printf("Sector %d %p\n", spe->sector, spe->vaddr);
      // This may or may not need to be here
      ASSERT(spe->sector != -1);
      // You need to utilize the in_swap variable when impelemnting eviction/swap for stack
      ASSERT(spe->in_swap != false);
      // Handle a swap for stack that had been swapped
     frame_swap_for_swapped(spe);
-
+    spe->in_swap = false;
+    spe->pin = false;
+    return;
    }
    }
 
