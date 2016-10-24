@@ -158,14 +158,17 @@ struct frame_table_elem* frame_find_swappable_frame()
       struct frame_table_element * fte = hash_entry(hash_cur (&i),
                                 struct  frame_table_element, elem_frame);
       ASSERT(fte->kpe != NULL);
-      if(!pagedir_is_accessed(fte->spe->t->pagedir, fte->spe->vaddr))
+      if(fte->spe->pin == false)
       {
-        lock_release(&frame_table_lock);
-        return fte;
-      }
-      else{
-        pagedir_set_accessed(fte->spe->t->pagedir, fte->spe->vaddr, false);
-      }
+        if(!pagedir_is_accessed(fte->spe->t->pagedir, fte->spe->vaddr))
+        {
+          lock_release(&frame_table_lock);
+          return fte;
+        }
+        else{
+          pagedir_set_accessed(fte->spe->t->pagedir, fte->spe->vaddr, false);
+        }
+      } // end if(pin == false)
     } // end while(has_next)
   } // end while()
 
@@ -198,10 +201,12 @@ uint8_t* frame_swap_for_swapped(
   struct supplement_page_table_elem* swapped_page)
   {
     struct frame_table_elem* fte_swap =  frame_find_swappable_frame();
+  //printf("5.1.2\n");
 
     uint8_t* kp   = swap_frame(fte_swap, swapped_page);
-
     pagedir_set_page(swapped_page->t->pagedir, swapped_page->vaddr, kp, swapped_page->writable);
+    //printf("5.1.2end\n");
+
     return kp;
   }
 
