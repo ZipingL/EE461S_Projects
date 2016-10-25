@@ -343,7 +343,7 @@ page_fault (struct intr_frame *f)
        return;
      }
      else {
-       printf ("fakePage fault at %p: %s error %s page in %s context.\n",
+    /*   printf ("fakePage fault at %p: %s error %s page in %s context.\n",
                fault_addr,
                not_present ? "not present" : "rights violation",
                write ? "writing" : "reading",
@@ -352,7 +352,7 @@ page_fault (struct intr_frame *f)
        spe->executable_page == true ? "is executable_page" : "not exectuable_page",
        spe->in_filesys == true ? "in filesys" : spe->in_swap == true ? "in swap" : "in frame",
        spe->access == true ? "accessed before" : "never accessed");
-       printf("Sector %d %p\n", spe->sector, spe->vaddr);
+       printf("Sector %d %p\n", spe->sector, spe->vaddr); */
      // This may or may not need to be here
      ASSERT(spe->sector != -1);
      // You need to utilize the in_swap variable when impelemnting eviction/swap for stack

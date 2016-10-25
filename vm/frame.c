@@ -5,9 +5,9 @@
 #include "threads/synch.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
-#include "vm/frame.h"
 #include "vm/swap.h"
 #include "vm/page.h"
+#include "vm/frame.h"
 
 struct hash frame_table;
 struct lock frame_table_lock;
@@ -143,6 +143,17 @@ bool frame_free(const void* kpe)
 
 }
 
+bool frame_free_nolock(const void* kpe)
+{
+  struct frame_table_element* fte = frame_find(kpe);
+  if(fte == NULL) { return false;}
+  //lock_acquire(&frame_table_lock);
+  fte->spe = NULL;
+  //lock_release(&frame_table_lock);
+  return true;
+
+}
+
 //Finds a frame to swap
 struct frame_table_elem* frame_find_swappable_frame()
 {
@@ -183,7 +194,7 @@ struct frame_table_elem* frame_find_swappable_frame()
 uint8_t* frame_swap_for_new(
   struct supplement_page_table_elem* new_page)
   {
-    struct frame_table_elem* fte_swap =  frame_find_swappable_frame();
+    struct frame_table_element* fte_swap =  frame_find_swappable_frame();
 
     uint8_t* kp   = swap_frame(fte_swap, new_page);
 
@@ -200,8 +211,9 @@ uint8_t* frame_swap_for_new(
 uint8_t* frame_swap_for_swapped(
   struct supplement_page_table_elem* swapped_page)
   {
-    struct frame_table_elem* fte_swap =  frame_find_swappable_frame();
-  //printf("5.1.2\n");
+    struct frame_table_element* fte_swap =  frame_find_swappable_frame();
+
+  printf("5.1.2 %d %p\n", fte_swap->spe->executable_page, fte_swap->spe);
 
     uint8_t* kp   = swap_frame(fte_swap, swapped_page);
     pagedir_set_page(swapped_page->t->pagedir, swapped_page->vaddr, kp, swapped_page->writable);

@@ -14,6 +14,8 @@
 #include "vm/frame.h"
 #include "kernel/hash.h"
 void swap_init();
+void swap_table_set(size_t sector, bool value);
+
 uint8_t* swap_frame(struct frame_table_element* fte,
           struct supplement_page_table_elem* new_page
         );

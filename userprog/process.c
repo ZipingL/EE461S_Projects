@@ -204,7 +204,6 @@ int process_wait (tid_t child_tid UNUSED)
     printf("status: %d", child_element->status);
   }*/
  // struct semaphore sema;
-
   sema_down(child_element->sema);
 
   int exit_status = child_element->exit_status;
@@ -240,7 +239,8 @@ process_exit (int exit_status)
   if(cur->exec_fp != NULL)
   file_close(cur->exec_fp);
   lock_release(&open_close_lock);
-  struct semaphore * child_sema = cur->child_data->sema;
+//  struct semaphore * child_sema = cur->child_data->sema;
+  struct semaphore *child_sema = NULL;
   printf ("%s: exit(%d)\n", cur->full_name, exit_status);
 
   // No need to report the exit status if the parent is dead,
@@ -251,9 +251,15 @@ process_exit (int exit_status)
   {
     cur->child_data->status = PROCESS_DONE;
     cur->child_data->exit_status = exit_status;
-    sema_up(child_sema); // notify waiting parent that the child is done
-
+    child_sema = cur->child_data->sema;
   }
+
+  if(child_sema != NULL)
+    sema_up(child_sema);
+    else{
+      sema_up(cur->hack_wait);
+    }
+
   uint32_t *pd;
 
 
@@ -276,10 +282,13 @@ process_exit (int exit_status)
        struct supplement_page_table_elem *spe =
           list_entry(e, struct supplement_page_table_elem, spt_elem);
 
-    //   struct frame_table_element * fte = frame_find(spe->kpe);
-    //   if(fte!= NULL && fte->spe == spe && spe->in_swap == false && spe->in_filesys == false)
-    //    frame_free(fte->kpe);
-       free(spe);
+    //  struct frame_table_element * fte = frame_find(spe->kpe);
+      //if(fte!= NULL && fte->spe == spe && (spe->in_swap == false || spe->in_filesys == false))
+        // frame_free_nolock(spe->kpe);
+        //spe->pin = false;
+        if(spe->in_swap && spe->sector != SIZE_MAX)
+         swap_table_set(spe->sector, false); // Page reclamation hack
+      free(spe);
      }
 
 

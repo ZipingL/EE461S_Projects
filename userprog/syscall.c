@@ -588,6 +588,9 @@ struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pi
 		   so that the child can update its status/ and exit status and the parent will see */
 		child_element->inception = &child_thread->child_data;
 		list_push_back(&parent_thread->child_list, &child_element->elem_child);
+    //Hack:
+    //printf("yo%p", child_element->sema);
+    child_thread->hack_wait = child_element->sema;
 		return child_element;
 }
 

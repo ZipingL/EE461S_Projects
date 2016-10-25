@@ -92,7 +92,7 @@ uint8_t* swap_frame(struct frame_table_element* fte,
   // if its an exectuable page, we do it in the page fault handler
   if(new_page->in_swap == true)
   {
-    printf("swap reader\n");
+  //  printf("swap reader\n");
     ASSERT(bitmap_test(swap_table, new_page->sector) == false);
     for (int i = 0; i < SECTORS_PER_PAGE; i++)
     {
@@ -110,4 +110,9 @@ uint8_t* swap_frame(struct frame_table_element* fte,
   // In case the frame writing is done in page fault handler
   lock_release(&swap_lock);
   return fte->kpe;
+}
+
+void swap_table_set(size_t sector, bool value)
+{
+  bitmap_set(swap_table, sector, value);
 }

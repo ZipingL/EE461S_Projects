@@ -41,7 +41,8 @@ uint8_t* esp = accessor == true ? f->esp : t->esp;
 	//}
  }
  else { // Or else exit if the access to a stack location was invalid, not missing
-//printf("%p\n", uva);
+//printf("%p\n", t->hack_wait);
+  printf("", t->hack_wait); // HACK 
    exit(-1);
  }
 }

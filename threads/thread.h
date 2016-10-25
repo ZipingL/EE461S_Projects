@@ -105,6 +105,7 @@ struct thread
    struct file * exec_fp;
    bool load_failed;
    struct child_list_elem *child_data; //Child can update its status for parent to see
+   struct sema* hack_wait; // A hack for wait
    struct list spt; // supplemental page table!
    uint8_t* esp;
 #endif
