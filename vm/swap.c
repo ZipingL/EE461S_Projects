@@ -63,8 +63,16 @@ uint8_t* swap_frame(struct frame_table_element* fte,
    ASSERT(free_swap_area != SIZE_MAX);
     for (int i = 0; i < SECTORS_PER_PAGE; i++)
     {
-      block_write(swap, free_swap_area*SECTORS_PER_PAGE + i,
+      bool lock_status = false;
+    if(!lock_held_by_current_thread(&read_write_lock))
+     {
+        lock_status = true;
+      lock_acquire(&read_write_lock);
+ }
+ block_write(swap_block, free_swap_area*SECTORS_PER_PAGE + i,
         (uint8_t*) fte->kpe + i*BLOCK_SECTOR_SIZE);
+       if(lock_status)
+        lock_release(&read_write_lock);
     }
 
     fte->spe->sector = free_swap_area;
@@ -72,7 +80,8 @@ uint8_t* swap_frame(struct frame_table_element* fte,
     fte->spe->in_swap = true;
   }
   else {
-    //ASSERT(fte->spe->in_filesys == false);
+    ASSERT(fte->spe->in_filesys == false);
+    ASSERT(fte->spe->pin == false);
 
     // Looks like this wasn't a missing page at all, but an invalid access
     // that the user program did!
@@ -96,8 +105,16 @@ uint8_t* swap_frame(struct frame_table_element* fte,
     ASSERT(bitmap_test(swap_table, new_page->sector) == false);
     for (int i = 0; i < SECTORS_PER_PAGE; i++)
     {
-      block_read(swap, new_page->sector*SECTORS_PER_PAGE + i,
+      bool lock_status = false;
+    if(!lock_held_by_current_thread(&read_write_lock))
+     {
+        lock_status = true;
+      lock_acquire(&read_write_lock);
+ }
+      block_read(swap_block, new_page->sector*SECTORS_PER_PAGE + i,
         (uint8_t*) fte->kpe + i*BLOCK_SECTOR_SIZE);
+        if(lock_status)
+        lock_release(&read_write_lock);
     }
 
 

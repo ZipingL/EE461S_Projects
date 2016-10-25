@@ -66,3 +66,10 @@ bool page_supplemental_entry_remove(void* uva)
   free(spe);
   return true;
 }
+
+void unpin_pointer(uint8_t* pointer)
+{
+  uint8_t* uva = (uint32_t)pointer & (uint32_t)0xFFFFF000;
+  struct supplement_page_table_elem* spe = page_find_spe(uva);
+  spe->pin = false;
+}

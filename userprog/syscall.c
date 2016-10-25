@@ -8,10 +8,11 @@
 #include "userprog/process.h"
 #include "filesys/filesys.h"
 #include "threads/synch.h"
-
+#include "vm/page.h"
 
 
 struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pid);
+unpin_ptr_to_buffer(uint8_t* ptr, bool string, size_t size);
 
 static int
 get_user (const uint8_t *uaddr);
@@ -39,7 +40,6 @@ static void
 syscall_handler (struct intr_frame *f) //UNUSED)
 {
 
-
   struct thread *t = thread_current();
   t->esp = f->esp;
 	// check for valid esp pointer (esp < PHYS_BASE)
@@ -64,7 +64,9 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 
 	// Check for valid arg pointers
   	if (!( is_user_vaddr (stack_ptr + 1) && is_user_vaddr (stack_ptr + 2) && is_user_vaddr (stack_ptr + 3)))
+    {
     	exit (-1,f);
+    }
 	// to avoid confusion in usage
 	char* name = NULL;
 	uint32_t file_size = 0;
@@ -91,6 +93,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			}
 			file_size = *(stack_ptr+2); //Now get the second arg: the size of the file
 			f->eax = create(name, file_size); //Create the file and then save the status to the eax register
+      unpin_ptr_to_buffer(name, true, -1);
 			break;
 		}
 			//(Does this mean that eax is just some storage register. What is it really??)
@@ -110,6 +113,8 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			//if(fd == -1)
 			//	exit(-1, f);
 			f->eax = fd;
+      unpin_ptr_to_buffer(name, true, -1);
+
 			break;
 		}
 		case SYS_SEEK:
@@ -166,6 +171,8 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 			else{
 				f->eax = size_read;
 			}
+      unpin_ptr_to_buffer(buffer, false, file_size);
+
 			break;
 		}
 		case SYS_WRITE:
@@ -185,6 +192,8 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 				exit(-1, f);
 			else
 				f->eax = size_write;
+
+      unpin_ptr_to_buffer(buffer, false, file_size);
 
 			break;
 		}
@@ -225,6 +234,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 	    {
 	    	name = *(stack_ptr+1);
 	    	f->eax = exec(name);
+        unpin_ptr_to_buffer(name, true, -1);
 	    	break;
 	    }
 
@@ -252,6 +262,7 @@ syscall_handler (struct intr_frame *f) //UNUSED)
 		}
 		}
 
+unpin_pointer(f->esp);
 }
 
 
@@ -401,13 +412,13 @@ int read (int fd, void *buffer, unsigned size)
 			}
 		struct fd_list_element *fd_element = list_entry(e, struct fd_list_element, elem_fd);
 
-    if(lock_held_by_current_thread(&read_write_lock))
-    {
-      printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
+    //if(lock_held_by_current_thread(&read_write_lock))
+    //{
+    //  printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
       lock_acquire(&read_write_lock);
-    }
+    //}
 		return_size = file_read (fd_element->fp, buffer, size) ;
-    if(lock_held_by_current_thread(&read_write_lock))
+    //if(lock_held_by_current_thread(&read_write_lock))
 			lock_release(&read_write_lock);
 
 	}
@@ -448,13 +459,14 @@ int write (int fd, const void *buffer, unsigned size) { //Already done in file.c
 			goto write_done; // return error if file not found
 		struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
 
-    if(lock_held_by_current_thread(&read_write_lock))
-    {
-      printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
+   //if(lock_held_by_current_thread(&read_write_lock))
+    //{
+      //printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
+    //  printf("", buffer);
       lock_acquire(&read_write_lock);
-    }
+    //}
 		return_size = file_write (fd_element->fp, buffer, size) ;
-    if(lock_held_by_current_thread(&read_write_lock))
+    //if(lock_held_by_current_thread(&read_write_lock))
 			lock_release(&read_write_lock);
 
 	}
@@ -619,4 +631,25 @@ put_user (uint8_t *udst, uint8_t byte)
   asm ("movl $1f, %0; movb %b2, %1; 1:"
        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
   return error_code != -1;
+}
+
+
+unpin_ptr_to_buffer(uint8_t* ptr, bool string, size_t size)
+{
+  uint8_t* pointer = ptr;
+  if(string)
+  {
+    while(*pointer != NULL)
+      {
+        unpin_pointer(pointer);
+        pointer++;
+      }
+  }
+  else{
+    for(int i = 0; i < size; i++)
+    {
+      unpin_pointer(pointer);
+      pointer++;
+    }
+  }
 }

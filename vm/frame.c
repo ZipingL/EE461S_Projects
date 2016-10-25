@@ -157,7 +157,7 @@ bool frame_free_nolock(const void* kpe)
 //Finds a frame to swap
 struct frame_table_elem* frame_find_swappable_frame()
 {
-  lock_acquire(&frame_table_lock);
+  //lock_acquire(&frame_table_lock);
 
   // simulate a circular buffer
   while(true)
@@ -173,7 +173,7 @@ struct frame_table_elem* frame_find_swappable_frame()
       {
         if(!pagedir_is_accessed(fte->spe->t->pagedir, fte->spe->vaddr))
         {
-          lock_release(&frame_table_lock);
+          //lock_release(&frame_table_lock);
           return fte;
         }
         else{
@@ -183,7 +183,7 @@ struct frame_table_elem* frame_find_swappable_frame()
     } // end while(has_next)
   } // end while()
 
-  lock_release(&frame_table_lock);
+//  lock_release(&frame_table_lock);
 }
 
 // Evict the page in the frame
@@ -194,11 +194,14 @@ struct frame_table_elem* frame_find_swappable_frame()
 uint8_t* frame_swap_for_new(
   struct supplement_page_table_elem* new_page)
   {
+    lock_acquire(&frame_table_lock);
     struct frame_table_element* fte_swap =  frame_find_swappable_frame();
 
     uint8_t* kp   = swap_frame(fte_swap, new_page);
+  //  printf("%p", new_page->vaddr);
+    install_page(new_page->vaddr, kp, new_page->writable);
+    lock_release(&frame_table_lock);
 
-    install_page(new_page->t->pagedir, new_page->vaddr, new_page->writable);
     return kp;
   }
 
@@ -211,13 +214,18 @@ uint8_t* frame_swap_for_new(
 uint8_t* frame_swap_for_swapped(
   struct supplement_page_table_elem* swapped_page)
   {
+    lock_acquire(&frame_table_lock);
+
     struct frame_table_element* fte_swap =  frame_find_swappable_frame();
 
-  printf("5.1.2 %d %p\n", fte_swap->spe->executable_page, fte_swap->spe);
+  ///printf("5.1.2 %d %p\n", fte_swap->spe->executable_page, fte_swap->spe);
 
     uint8_t* kp   = swap_frame(fte_swap, swapped_page);
+    //printf("stackinstallation %p\n", swapped_page->vaddr);
+
     pagedir_set_page(swapped_page->t->pagedir, swapped_page->vaddr, kp, swapped_page->writable);
     //printf("5.1.2end\n");
+    lock_release(&frame_table_lock);
 
     return kp;
   }

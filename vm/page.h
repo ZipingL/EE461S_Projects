@@ -32,6 +32,7 @@ struct supplement_page_table_elem* page_add_supplemental_elem
       uint8_t* vaddr, bool executable_page);
 
 bool page_supplemental_entry_remove(void* uva);
+void unpin_pointer(uint8_t* pointer);
 
 
 #endif

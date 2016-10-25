@@ -162,6 +162,7 @@ page_fault (struct intr_frame *f)
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
+  //printf("Fault addr %p\n", fault_addr);
 
 //printf("hello start\n");
   /* Turn interrupts back on (they were only off so that we could
@@ -186,6 +187,7 @@ page_fault (struct intr_frame *f)
 //printf("%p\n", fault_addr);
   if(!is_user_vaddr(fault_addr))
   {
+
      exit(-1);
    }
 
@@ -197,7 +199,6 @@ page_fault (struct intr_frame *f)
     page_find_spe(uva);
     if(spe == NULL && !exception_check_if_stack(uva,fault_addr))
     {
-
       exit(-1);
     }
 
@@ -250,7 +251,6 @@ page_fault (struct intr_frame *f)
    //struct block* swap = block_get_role(BLOCK_SWAP);
 
    // We know the page that faulted was for code/heap
-
    if(spe != NULL && spe->executable_page)
    {
      spe->pin = true; // Pin the page, so that it doesn't get evicted
@@ -265,7 +265,6 @@ page_fault (struct intr_frame *f)
         // Does not write to the code
         if(write && !not_present)
         {
-
         exit(-1);
       }
      // Need to utilize in_filesys and in_swap when Implementing
@@ -286,16 +285,15 @@ page_fault (struct intr_frame *f)
        ASSERT(spe->exec_ofs != -1);
 
        bool lock_status = false;
-      // if(!lock_held_by_current_thread(&read_write_lock))
-    //   {
+     if(!lock_held_by_current_thread(&read_write_lock))
+      {
          lock_status = true;
-         spe->pin = true;
        lock_acquire(&read_write_lock);
-  //   }
+  }
   //printf("Hello start 5\n");
 
        ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
-//if(lock_status)
+if(lock_status)
       lock_release(&read_write_lock);
 
        memset (kp + spe->page_read_bytes, 0, spe->page_zero_bytes);
@@ -303,7 +301,7 @@ page_fault (struct intr_frame *f)
        // if its missing it means the page faulted because the page for the code
        // has not been loaded up yet, it did not fault because the page was swapped
        // out, which would mean install_page has already been done!
-       //printf("installation\n");
+    //   printf("installation %p\n", spe->vaddr);
        install_page(spe->vaddr, kp, spe->writable);
        spe->in_filesys = false;
        //printf("bye\n");
@@ -318,9 +316,17 @@ page_fault (struct intr_frame *f)
        kp = frame_swap_for_swapped(spe);
       // printf("Hello start 5.2\n");
 
-       lock_acquire(&read_write_lock);
+
+             bool lock_status = false;
+           if(!lock_held_by_current_thread(&read_write_lock))
+            {
+               lock_status = true;
+               spe->pin = true;
+             lock_acquire(&read_write_lock);
+        }
        ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
-       lock_release(&read_write_lock);
+       if(lock_status)
+             lock_release(&read_write_lock);
        spe->in_filesys = false;
        spe->pin = false;
        return;
@@ -360,7 +366,7 @@ page_fault (struct intr_frame *f)
      // Handle a swap for stack that had been swapped
     frame_swap_for_swapped(spe);
     spe->in_swap = false;
-    spe->pin = false;
+  //  spe->pin = false;
     return;
    }
    }

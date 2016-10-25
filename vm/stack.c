@@ -9,7 +9,6 @@
 #include "vm/frame.h"
 #include "userprog/process.h"
 
-
 void stack_growth(struct intr_frame * f, bool present, bool access, bool accessor, void* uva) {
 struct thread *t = thread_current();
 uint8_t* esp = accessor == true ? f->esp : t->esp;
@@ -42,7 +41,7 @@ uint8_t* esp = accessor == true ? f->esp : t->esp;
  }
  else { // Or else exit if the access to a stack location was invalid, not missing
 //printf("%p\n", t->hack_wait);
-  printf("", t->hack_wait); // HACK 
+  printf("", t->hack_wait); // HACK
    exit(-1);
  }
 }

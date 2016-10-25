@@ -22,7 +22,6 @@
 #include "lib/kernel/list.h"
 #include "vm/frame.h"
 #include "vm/page.h"
-
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 int parse_command_string(char* command, char* argv[], bool set_first_only);
@@ -85,7 +84,7 @@ process_execute (const char *file_name)
   parse_command_string(file_name_no_args, argv, true);
   struct child_list_elem* success = NULL;
 
-  lock_acquire(&open_close_lock);
+  //lock_acquire(&open_close_lock);
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (argv[0], PRI_DEFAULT, start_process, fn_copy);
 
@@ -112,7 +111,7 @@ process_execute (const char *file_name)
   sema_init(&sema,0);
 
   success->load_status = &sema; //Done in syscall.c instead
-  lock_release(&open_close_lock);
+  //lock_release(&open_close_lock);
   sema_down(&sema);
 
   if(success->mom_im_out_of_money)
@@ -235,10 +234,10 @@ process_exit (int exit_status)
        free(element);
      }
   // Now free the file pointer to the code the user program ran on
-  lock_acquire(&open_close_lock);
+  //lock_acquire(&open_close_lock);
   if(cur->exec_fp != NULL)
   file_close(cur->exec_fp);
-  lock_release(&open_close_lock);
+  //lock_release(&open_close_lock);
 //  struct semaphore * child_sema = cur->child_data->sema;
   struct semaphore *child_sema = NULL;
   printf ("%s: exit(%d)\n", cur->full_name, exit_status);
@@ -404,7 +403,6 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp)
 {
-
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -554,7 +552,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
   strlcpy(file_name_cpy, file_name, file_char_length);
   bool setup_stack_success = setup_stack(esp, file_name_cpy);
   if (!setup_stack_success)
+  {
+    done_level = 3;
     goto done;
+  }
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -563,7 +564,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-
+//printf("level %d %d", done_level, success);
 //ock_acquire(&open_close_lock);
  if(!success)
  {
@@ -587,6 +588,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 //if(lock_status)
   lock_release(&read_write_lock);
+
   return success;
 }
 /* load() helpers. */
@@ -670,7 +672,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
          and zero the final PAGE_ZERO_BYTES bytes. */
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
       struct supplement_page_table_elem* spe = page_add_supplemental_elem(&t->spt, t,
                                           upage, true);
       // save the required variables so that page fault handler can do the loading  of exec file
@@ -751,11 +752,24 @@ setup_stack (void **esp, char* file_name)
   spe->writable = true;
   spe->pin = true;
   kpage = frame_request(spe);
+  if(kpage != NULL)
+  {
+    success = install_page (uva, kpage, true);
+
+  }
+  if(kpage==NULL)
+  {
+    //printf("cool\n");
+    kpage = frame_swap_for_new(spe); // installed in frame_swap...
+    //success = install_page (uva, kpage, true);
+
+    success=true;
+  }
 
   if (kpage != NULL)
     {
       uint8_t* uva = ((uint8_t *) PHYS_BASE) - PGSIZE;
-      success = install_page (uva, kpage, true);
+      //success = install_page (uva, kpage, true);
       if (success)
       {
         *esp = PHYS_BASE;
