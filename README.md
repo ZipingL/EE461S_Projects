@@ -86,7 +86,7 @@ This is our group's repository for our EE461S class.
 	pass tests/vm/pt-grow-bad
 	pass tests/vm/pt-big-stk-obj
 	pass tests/vm/pt-bad-addr
-	FAIL tests/vm/pt-bad-read
+	pass tests/vm/pt-bad-read
 	pass tests/vm/pt-write-code
 	pass tests/vm/pt-write-code2
 	pass tests/vm/pt-grow-stk-sc
@@ -128,7 +128,7 @@ This is our group's repository for our EE461S class.
 	pass tests/filesys/base/syn-read
 	pass tests/filesys/base/syn-remove
 	pass tests/filesys/base/syn-write
-	23 of 109 tests failed.
+	22 of 109 tests failed.
 
 
 
