@@ -1,4 +1,0 @@
-Use of literal control characters in variable names is deprecated at /home/ziping/Documents/OperatingSystems/Project2/project2/utils/pintos line 917.
-Prototype mismatch: sub main::SIGVTALRM () vs none at /home/ziping/Documents/OperatingSystems/Project2/project2/utils/pintos line 942.
-Constant subroutine SIGVTALRM redefined at /home/ziping/Documents/OperatingSystems/Project2/project2/utils/pintos line 934.
-tests/vm/page-linear: stat: No such file or directory

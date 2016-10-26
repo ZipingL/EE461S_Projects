@@ -22,7 +22,6 @@ size_t histogram[256];
 static void
 init (void) 
 {
-
   struct arc4 arc4;
   size_t i;
 

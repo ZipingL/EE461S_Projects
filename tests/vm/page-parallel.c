@@ -9,7 +9,6 @@
 void
 test_main (void)
 {
-return;
   pid_t children[CHILD_CNT];
   int i;
 

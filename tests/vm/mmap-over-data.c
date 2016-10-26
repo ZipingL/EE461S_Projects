@@ -11,7 +11,6 @@ static char x;
 void
 test_main (void) 
 {
-return;
   uintptr_t x_page = ROUND_DOWN ((uintptr_t) &x, 4096);
   int handle;
   

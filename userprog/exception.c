@@ -162,7 +162,7 @@ page_fault (struct intr_frame *f)
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
-  //printf("Fault addr %p\n", fault_addr);
+  //printf("Fault addr %p interrupt %d\n", fault_addr, intr_context());
 
 //printf("hello start\n");
   /* Turn interrupts back on (they were only off so that we could
@@ -332,7 +332,7 @@ if(lock_status)
        return;
      }
      //printf("Hello start 6\n");
-
+//hd
 
    }
 

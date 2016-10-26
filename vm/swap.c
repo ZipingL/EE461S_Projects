@@ -58,6 +58,7 @@ uint8_t* swap_frame(struct frame_table_element* fte,
 
   if(fte->spe->executable_page == false)
   {
+    ASSERT(fte->spe->in_swap == false);
   //  int free_swap_area = swap_find_block_and_set();
    int free_swap_area = bitmap_scan_and_flip(swap_table, 0, 1, true);
    ASSERT(free_swap_area != SIZE_MAX);
@@ -80,7 +81,8 @@ uint8_t* swap_frame(struct frame_table_element* fte,
     fte->spe->in_swap = true;
   }
   else {
-    ASSERT(fte->spe->in_filesys == false);
+    ASSERT(fte->spe->in_swap == false);
+    PANIC(fte->spe->in_filesys == false);
     ASSERT(fte->spe->pin == false);
 
     // Looks like this wasn't a missing page at all, but an invalid access
