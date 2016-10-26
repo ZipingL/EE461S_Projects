@@ -293,10 +293,11 @@ page_fault (struct intr_frame *f)
   //printf("Hello start 5\n");
 
        ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
+       memset (kp + spe->page_read_bytes, 0, spe->page_zero_bytes);
+
 if(lock_status)
       lock_release(&read_write_lock);
 
-       memset (kp + spe->page_read_bytes, 0, spe->page_zero_bytes);
        // Install the page to the page directory only if it was missing (not_present == TRUE),
        // if its missing it means the page faulted because the page for the code
        // has not been loaded up yet, it did not fault because the page was swapped
@@ -325,6 +326,8 @@ if(lock_status)
              lock_acquire(&read_write_lock);
         }
        ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
+       memset (kp + spe->page_read_bytes, 0, spe->page_zero_bytes);
+
        if(lock_status)
              lock_release(&read_write_lock);
        spe->in_filesys = false;

@@ -1,0 +1,3608 @@
+diff --git a/Makefile.build b/Makefile.build
+index e997d27..e9b486b 100644
+--- a/Makefile.build
++++ b/Makefile.build
+@@ -62,7 +62,11 @@ userprog_SRC += userprog/gdt.c		# GDT initialization.
+ userprog_SRC += userprog/tss.c		# TSS management.
+ 
+ # No virtual memory code yet.
+-#vm_SRC = vm/file.c			# Some file.
++
++vm_SRC = vm/frame.c			# Frame Table
++vm_SRC += vm/page.c                     # Supplemental Page Table
++vm_SRC += vm/stack.c
++vm_SRC += vm/swap.c
+ 
+ # Filesystem code.
+ filesys_SRC  = filesys/filesys.c	# Filesystem core.
+diff --git a/devices/block.h b/devices/block.h
+index 21732d6..a5e5293 100644
+--- a/devices/block.h
++++ b/devices/block.h
+@@ -9,6 +9,7 @@
+    disks.  It's not worth it to try to cater to other sector
+    sizes in Pintos (yet). */
+ #define BLOCK_SECTOR_SIZE 512
++#define SECTORS_PER_PAGE 4 // sizeof(page) / sizeof(sector) = 4048 / 512 = 4
+ 
+ /* Index of a block device sector.
+    Good enough for devices up to 2 TB. */
+diff --git a/filesys/file.c b/filesys/file.c
+index d5fc10d..ab6dbd3 100644
+--- a/filesys/file.c
++++ b/filesys/file.c
+@@ -4,7 +4,7 @@
+ #include "threads/malloc.h"
+ 
+ /* An open file. */
+-struct file 
++struct file
+   {
+     struct inode *inode;        /* File's inode. */
+     off_t pos;                  /* Current position. */
+@@ -15,7 +15,7 @@ struct file
+    and returns the new file.  Returns a null pointer if an
+    allocation fails or if INODE is null. */
+ struct file *
+-file_open (struct inode *inode) 
++file_open (struct inode *inode)
+ {
+   struct file *file = calloc (1, sizeof *file);
+   if (inode != NULL && file != NULL)
+@@ -29,33 +29,33 @@ file_open (struct inode *inode)
+     {
+       inode_close (inode);
+       free (file);
+-      return NULL; 
++      return NULL;
+     }
+ }
+ 
+ /* Opens and returns a new file for the same inode as FILE.
+    Returns a null pointer if unsuccessful. */
+ struct file *
+-file_reopen (struct file *file) 
++file_reopen (struct file *file)
+ {
+   return file_open (inode_reopen (file->inode));
+ }
+ 
+ /* Closes FILE. */
+ void
+-file_close (struct file *file) 
++file_close (struct file *file)
+ {
+   if (file != NULL)
+     {
+       file_allow_write (file);
+       inode_close (file->inode);
+-      free (file); 
++      free (file);
+     }
+ }
+ 
+ /* Returns the inode encapsulated by FILE. */
+ struct inode *
+-file_get_inode (struct file *file) 
++file_get_inode (struct file *file)
+ {
+   return file->inode;
+ }
+@@ -66,7 +66,7 @@ file_get_inode (struct file *file)
+    which may be less than SIZE if end of file is reached.
+    Advances FILE's position by the number of bytes read. */
+ off_t
+-file_read (struct file *file, void *buffer, off_t size) 
++file_read (struct file *file, void *buffer, off_t size)
+ {
+   off_t bytes_read = inode_read_at (file->inode, buffer, size, file->pos);
+   file->pos += bytes_read;
+@@ -79,7 +79,7 @@ file_read (struct file *file, void *buffer, off_t size)
+    which may be less than SIZE if end of file is reached.
+    The file's current position is unaffected. */
+ off_t
+-file_read_at (struct file *file, void *buffer, off_t size, off_t file_ofs) 
++file_read_at (struct file *file, void *buffer, off_t size, off_t file_ofs)
+ {
+   return inode_read_at (file->inode, buffer, size, file_ofs);
+ }
+@@ -92,7 +92,7 @@ file_read_at (struct file *file, void *buffer, off_t size, off_t file_ofs)
+    not yet implemented.)
+    Advances FILE's position by the number of bytes read. */
+ off_t
+-file_write (struct file *file, const void *buffer, off_t size) 
++file_write (struct file *file, const void *buffer, off_t size)
+ {
+   off_t bytes_written = inode_write_at (file->inode, buffer, size, file->pos);
+   file->pos += bytes_written;
+@@ -108,7 +108,7 @@ file_write (struct file *file, const void *buffer, off_t size)
+    The file's current position is unaffected. */
+ off_t
+ file_write_at (struct file *file, const void *buffer, off_t size,
+-               off_t file_ofs) 
++               off_t file_ofs)
+ {
+   return inode_write_at (file->inode, buffer, size, file_ofs);
+ }
+@@ -116,10 +116,10 @@ file_write_at (struct file *file, const void *buffer, off_t size,
+ /* Prevents write operations on FILE's underlying inode
+    until file_allow_write() is called or FILE is closed. */
+ void
+-file_deny_write (struct file *file) 
++file_deny_write (struct file *file)
+ {
+   ASSERT (file != NULL);
+-  if (!file->deny_write) 
++  if (!file->deny_write)
+     {
+       file->deny_write = true;
+       inode_deny_write (file->inode);
+@@ -130,10 +130,10 @@ file_deny_write (struct file *file)
+    (Writes might still be denied by some other file that has the
+    same inode open.) */
+ void
+-file_allow_write (struct file *file) 
++file_allow_write (struct file *file)
+ {
+   ASSERT (file != NULL);
+-  if (file->deny_write) 
++  if (file->deny_write)
+     {
+       file->deny_write = false;
+       inode_allow_write (file->inode);
+@@ -142,7 +142,7 @@ file_allow_write (struct file *file)
+ 
+ /* Returns the size of FILE in bytes. */
+ off_t
+-file_length (struct file *file) 
++file_length (struct file *file)
+ {
+   ASSERT (file != NULL);
+   return inode_length (file->inode);
+@@ -161,7 +161,7 @@ file_seek (struct file *file, off_t new_pos)
+ /* Returns the current position in FILE as a byte offset from the
+    start of the file. */
+ off_t
+-file_tell (struct file *file) 
++file_tell (struct file *file)
+ {
+   ASSERT (file != NULL);
+   return file->pos;
+diff --git a/filesys/filesys.c b/filesys/filesys.c
+index 7a53f5f..5dc0510 100644
+--- a/filesys/filesys.c
++++ b/filesys/filesys.c
+@@ -37,7 +37,6 @@ filesys_done (void)
+ {
+   free_map_close ();
+ }
+-
+ /* Creates a file named NAME with the given INITIAL_SIZE.
+    Returns true if successful, false otherwise.
+    Fails if a file named NAME already exists,
+@@ -89,7 +88,7 @@ filesys_remove (const char *name)
+ 
+   return success;
+ }
+-
++
+ /* Formats the file system. */
+ static void
+ do_format (void)
+diff --git a/lib/kernel/console.c b/lib/kernel/console.c
+index 844b184..5c7ed8f 100644
+--- a/lib/kernel/console.c
++++ b/lib/kernel/console.c
+@@ -168,7 +168,6 @@ putchar (int c)
+   
+   return c;
+ }
+-
+ /* Helper function for vprintf(). */
+ static void
+ vprintf_helper (char c, void *char_cnt_) 
+diff --git a/threads/init.c b/threads/init.c
+index cebec2c..5fe26bc 100644
+--- a/threads/init.c
++++ b/threads/init.c
+@@ -38,6 +38,9 @@
+ #include "filesys/fsutil.h"
+ #endif
+ 
++#include "vm/frame.h"
++#include "vm/swap.h"
++
+ /* Page directory with kernel mappings only. */
+ uint32_t *init_page_dir;
+ 
+@@ -49,6 +52,7 @@ static bool format_filesys;
+    overriding the defaults. */
+ static const char *filesys_bdev_name;
+ static const char *scratch_bdev_name;
++
+ #ifdef VM
+ static const char *swap_bdev_name;
+ #endif
+@@ -78,7 +82,7 @@ main (void)
+ {
+   char **argv;
+ 
+-  /* Clear BSS. */  
++  /* Clear BSS. */
+   bss_init ();
+ 
+   /* Break command line into arguments and parse options. */
+@@ -88,7 +92,7 @@ main (void)
+   /* Initialize ourselves as a thread so we can use locks,
+      then enable console locking. */
+   thread_init ();
+-  console_init ();  
++  console_init ();
+ 
+   /* Greet user. */
+   printf ("Pintos booting with %'"PRIu32" kB RAM...\n",
+@@ -115,6 +119,7 @@ main (void)
+   syscall_init ();
+ #endif
+ 
++
+   /* Start thread scheduler and enable interrupts. */
+   thread_start ();
+   serial_init_queue ();
+@@ -127,8 +132,12 @@ main (void)
+   filesys_init (format_filesys);
+ #endif
+ 
++/* Initialize stuff for virtual memory implementation*/
++frame_intitialization();
++swap_init();
++
+   printf ("Boot complete.\n");
+-  
++
+   /* Run actions specified on kernel command line. */
+   run_actions (argv);
+ 
+@@ -136,7 +145,7 @@ main (void)
+   shutdown ();
+   thread_exit ();
+ }
+-
++
+ /* Clear the "BSS", a segment that should be initialized to
+    zeros.  It isn't actually stored on disk or zeroed by the
+    kernel loader, so we have to zero it ourselves.
+@@ -144,7 +153,7 @@ main (void)
+    The start and end of the BSS segment is recorded by the
+    linker as _start_bss and _end_bss.  See kernel.lds. */
+ static void
+-bss_init (void) 
++bss_init (void)
+ {
+   extern char _start_bss, _end_bss;
+   memset (&_start_bss, 0, &_end_bss - &_start_bss);
+@@ -191,7 +200,7 @@ paging_init (void)
+ /* Breaks the kernel command line into words and returns them as
+    an argv-like array. */
+ static char **
+-read_command_line (void) 
++read_command_line (void)
+ {
+   static char *argv[LOADER_ARGS_LEN / 2 + 1];
+   char *p, *end;
+@@ -201,7 +210,7 @@ read_command_line (void)
+   argc = *(uint32_t *) ptov (LOADER_ARG_CNT);
+   p = ptov (LOADER_ARGS);
+   end = p + LOADER_ARGS_LEN;
+-  for (i = 0; i < argc; i++) 
++  for (i = 0; i < argc; i++)
+     {
+       if (p >= end)
+         PANIC ("command line arguments overflow");
+@@ -226,14 +235,14 @@ read_command_line (void)
+ /* Parses options in ARGV[]
+    and returns the first non-option argument. */
+ static char **
+-parse_options (char **argv) 
++parse_options (char **argv)
+ {
+   for (; *argv != NULL && **argv == '-'; argv++)
+     {
+       char *save_ptr;
+       char *name = strtok_r (*argv, "=", &save_ptr);
+       char *value = strtok_r (NULL, "", &save_ptr);
+-      
++
+       if (!strcmp (name, "-h"))
+         usage ();
+       else if (!strcmp (name, "-q"))
+@@ -273,7 +282,7 @@ parse_options (char **argv)
+      for reproducibility.  To fix this, give the "-r" option to
+      the pintos script to request real-time execution. */
+   random_init (rtc_get_time ());
+-  
++
+   return argv;
+ }
+ 
+@@ -282,7 +291,7 @@ static void
+ run_task (char **argv)
+ {
+   const char *task = argv[1];
+-  
++
+   printf ("Executing '%s':\n", task);
+ #ifdef USERPROG
+   process_wait (process_execute (task));
+@@ -295,10 +304,10 @@ run_task (char **argv)
+ /* Executes all of the actions specified in ARGV[]
+    up to the null pointer sentinel. */
+ static void
+-run_actions (char **argv) 
++run_actions (char **argv)
+ {
+   /* An action. */
+-  struct action 
++  struct action
+     {
+       char *name;                       /* Action name. */
+       int argc;                         /* # of args, including action name. */
+@@ -306,7 +315,7 @@ run_actions (char **argv)
+     };
+ 
+   /* Table of supported actions. */
+-  static const struct action actions[] = 
++  static const struct action actions[] =
+     {
+       {"run", 2, run_task},
+ #ifdef FILESYS
+@@ -340,7 +349,7 @@ run_actions (char **argv)
+       a->function (argv);
+       argv += a->argc;
+     }
+-  
++
+ }
+ 
+ /* Prints a kernel command line help message and powers off the
+diff --git a/threads/palloc.c b/threads/palloc.c
+index 4fc8394..1a2dd87 100644
+--- a/threads/palloc.c
++++ b/threads/palloc.c
+@@ -86,12 +86,12 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
+   else
+     pages = NULL;
+ 
+-  if (pages != NULL) 
++  if (pages != NULL)
+     {
+       if (flags & PAL_ZERO)
+         memset (pages, 0, PGSIZE * page_cnt);
+     }
+-  else 
++  else
+     {
+       if (flags & PAL_ASSERT)
+         PANIC ("palloc_get: out of pages");
+@@ -108,14 +108,14 @@ palloc_get_multiple (enum palloc_flags flags, size_t page_cnt)
+    available, returns a null pointer, unless PAL_ASSERT is set in
+    FLAGS, in which case the kernel panics. */
+ void *
+-palloc_get_page (enum palloc_flags flags) 
++palloc_get_page (enum palloc_flags flags)
+ {
+   return palloc_get_multiple (flags, 1);
+ }
+ 
+ /* Frees the PAGE_CNT pages starting at PAGES. */
+ void
+-palloc_free_multiple (void *pages, size_t page_cnt) 
++palloc_free_multiple (void *pages, size_t page_cnt)
+ {
+   struct pool *pool;
+   size_t page_idx;
+@@ -143,7 +143,7 @@ palloc_free_multiple (void *pages, size_t page_cnt)
+ 
+ /* Frees the page at PAGE. */
+ void
+-palloc_free_page (void *page) 
++palloc_free_page (void *page)
+ {
+   palloc_free_multiple (page, 1);
+ }
+@@ -151,7 +151,7 @@ palloc_free_page (void *page)
+ /* Initializes pool P as starting at START and ending at END,
+    naming it NAME for debugging purposes. */
+ static void
+-init_pool (struct pool *p, void *base, size_t page_cnt, const char *name) 
++init_pool (struct pool *p, void *base, size_t page_cnt, const char *name)
+ {
+   /* We'll put the pool's used_map at its base.
+      Calculate the space needed for the bitmap
+@@ -172,7 +172,7 @@ init_pool (struct pool *p, void *base, size_t page_cnt, const char *name)
+ /* Returns true if PAGE was allocated from POOL,
+    false otherwise. */
+ static bool
+-page_from_pool (const struct pool *pool, void *page) 
++page_from_pool (const struct pool *pool, void *page)
+ {
+   size_t page_no = pg_no (page);
+   size_t start_page = pg_no (pool->base);
+diff --git a/threads/synch.c b/threads/synch.c
+index 317c68a..1877142 100644
+--- a/threads/synch.c
++++ b/threads/synch.c
+@@ -42,7 +42,7 @@
+    - up or "V": increment the value (and wake up one waiting
+      thread, if any). */
+ void
+-sema_init (struct semaphore *sema, unsigned value) 
++sema_init (struct semaphore *sema, unsigned value)
+ {
+   ASSERT (sema != NULL);
+ 
+@@ -58,7 +58,7 @@ sema_init (struct semaphore *sema, unsigned value)
+    interrupts disabled, but if it sleeps then the next scheduled
+    thread will probably turn interrupts back on. */
+ void
+-sema_down (struct semaphore *sema) 
++sema_down (struct semaphore *sema)
+ {
+   enum intr_level old_level;
+ 
+@@ -66,7 +66,7 @@ sema_down (struct semaphore *sema)
+   ASSERT (!intr_context ());
+ 
+   old_level = intr_disable ();
+-  while (sema->value == 0) 
++  while (sema->value == 0)
+     {
+       list_push_back (&sema->waiters, &thread_current ()->elem);
+       thread_block ();
+@@ -81,7 +81,7 @@ sema_down (struct semaphore *sema)
+ 
+    This function may be called from an interrupt handler. */
+ bool
+-sema_try_down (struct semaphore *sema) 
++sema_try_down (struct semaphore *sema)
+ {
+   enum intr_level old_level;
+   bool success;
+@@ -89,10 +89,10 @@ sema_try_down (struct semaphore *sema)
+   ASSERT (sema != NULL);
+ 
+   old_level = intr_disable ();
+-  if (sema->value > 0) 
++  if (sema->value > 0)
+     {
+       sema->value--;
+-      success = true; 
++      success = true;
+     }
+   else
+     success = false;
+@@ -106,14 +106,14 @@ sema_try_down (struct semaphore *sema)
+ 
+    This function may be called from an interrupt handler. */
+ void
+-sema_up (struct semaphore *sema) 
++sema_up (struct semaphore *sema)
+ {
+   enum intr_level old_level;
+ 
+   ASSERT (sema != NULL);
+ 
+   old_level = intr_disable ();
+-  if (!list_empty (&sema->waiters)) 
++  if (!list_empty (&sema->waiters))
+     thread_unblock (list_entry (list_pop_front (&sema->waiters),
+                                 struct thread, elem));
+   sema->value++;
+@@ -126,7 +126,7 @@ static void sema_test_helper (void *sema_);
+    between a pair of threads.  Insert calls to printf() to see
+    what's going on. */
+ void
+-sema_self_test (void) 
++sema_self_test (void)
+ {
+   struct semaphore sema[2];
+   int i;
+@@ -135,7 +135,7 @@ sema_self_test (void)
+   sema_init (&sema[0], 0);
+   sema_init (&sema[1], 0);
+   thread_create ("sema-test", PRI_DEFAULT, sema_test_helper, &sema);
+-  for (i = 0; i < 10; i++) 
++  for (i = 0; i < 10; i++)
+     {
+       sema_up (&sema[0]);
+       sema_down (&sema[1]);
+@@ -145,12 +145,12 @@ sema_self_test (void)
+ 
+ /* Thread function used by sema_self_test(). */
+ static void
+-sema_test_helper (void *sema_) 
++sema_test_helper (void *sema_)
+ {
+   struct semaphore *sema = sema_;
+   int i;
+ 
+-  for (i = 0; i < 10; i++) 
++  for (i = 0; i < 10; i++)
+     {
+       sema_down (&sema[0]);
+       sema_up (&sema[1]);
+@@ -226,7 +226,7 @@ lock_try_acquire (struct lock *lock)
+    make sense to try to release a lock within an interrupt
+    handler. */
+ void
+-lock_release (struct lock *lock) 
++lock_release (struct lock *lock)
+ {
+   ASSERT (lock != NULL);
+   ASSERT (lock_held_by_current_thread (lock));
+@@ -239,7 +239,7 @@ lock_release (struct lock *lock)
+    otherwise.  (Note that testing whether some other thread holds
+    a lock would be racy.) */
+ bool
+-lock_held_by_current_thread (const struct lock *lock) 
++lock_held_by_current_thread (const struct lock *lock)
+ {
+   ASSERT (lock != NULL);
+ 
+@@ -247,7 +247,7 @@ lock_held_by_current_thread (const struct lock *lock)
+ }
+ 
+ /* One semaphore in a list. */
+-struct semaphore_elem 
++struct semaphore_elem
+   {
+     struct list_elem elem;              /* List element. */
+     struct semaphore semaphore;         /* This semaphore. */
+@@ -285,7 +285,7 @@ cond_init (struct condition *cond)
+    interrupts disabled, but interrupts will be turned back on if
+    we need to sleep. */
+ void
+-cond_wait (struct condition *cond, struct lock *lock) 
++cond_wait (struct condition *cond, struct lock *lock)
+ {
+   struct semaphore_elem waiter;
+ 
+@@ -293,7 +293,7 @@ cond_wait (struct condition *cond, struct lock *lock)
+   ASSERT (lock != NULL);
+   ASSERT (!intr_context ());
+   ASSERT (lock_held_by_current_thread (lock));
+-  
++
+   sema_init (&waiter.semaphore, 0);
+   list_push_back (&cond->waiters, &waiter.elem);
+   lock_release (lock);
+@@ -309,14 +309,14 @@ cond_wait (struct condition *cond, struct lock *lock)
+    make sense to try to signal a condition variable within an
+    interrupt handler. */
+ void
+-cond_signal (struct condition *cond, struct lock *lock UNUSED) 
++cond_signal (struct condition *cond, struct lock *lock UNUSED)
+ {
+   ASSERT (cond != NULL);
+   ASSERT (lock != NULL);
+   ASSERT (!intr_context ());
+   ASSERT (lock_held_by_current_thread (lock));
+ 
+-  if (!list_empty (&cond->waiters)) 
++  if (!list_empty (&cond->waiters))
+     sema_up (&list_entry (list_pop_front (&cond->waiters),
+                           struct semaphore_elem, elem)->semaphore);
+ }
+@@ -328,7 +328,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
+    make sense to try to signal a condition variable within an
+    interrupt handler. */
+ void
+-cond_broadcast (struct condition *cond, struct lock *lock) 
++cond_broadcast (struct condition *cond, struct lock *lock)
+ {
+   ASSERT (cond != NULL);
+   ASSERT (lock != NULL);
+diff --git a/threads/thread.c b/threads/thread.c
+index 87f22b8..08736e4 100644
+--- a/threads/thread.c
++++ b/threads/thread.c
+@@ -13,6 +13,7 @@
+ #include "threads/vaddr.h"
+ #ifdef USERPROG
+ #include "userprog/process.h"
++#include "userprog/syscall.h"
+ #endif
+ 
+ /* Random value for struct thread's `magic' member.
+@@ -37,8 +38,10 @@ static struct thread *initial_thread;
+ /* Lock used by allocate_tid(). */
+ static struct lock tid_lock;
+ 
++
++
+ /* Stack frame for kernel_thread(). */
+-struct kernel_thread_frame 
++struct kernel_thread_frame
+   {
+     void *eip;                  /* Return address. */
+     thread_func *function;      /* Function to call. */
+@@ -85,7 +88,7 @@ static tid_t allocate_tid (void);
+    It is not safe to call thread_current() until this function
+    finishes. */
+ void
+-thread_init (void) 
++thread_init (void)
+ {
+   ASSERT (intr_get_level () == INTR_OFF);
+ 
+@@ -98,12 +101,19 @@ thread_init (void)
+   init_thread (initial_thread, "main", PRI_DEFAULT);
+   initial_thread->status = THREAD_RUNNING;
+   initial_thread->tid = allocate_tid ();
++  //Initialize the child list for the god thread
++  list_init(&initial_thread->child_list);
++  //Initialize fd table  for the god thread
++  list_init(&initial_thread->fd_table);
++  initial_thread->fd_table_counter = 2;
++  //This is for the supplementalpagetable
++  list_init(&initial_thread->spt);
+ }
+ 
+ /* Starts preemptive thread scheduling by enabling interrupts.
+    Also creates the idle thread. */
+ void
+-thread_start (void) 
++thread_start (void)
+ {
+   /* Create the idle thread. */
+   struct semaphore idle_started;
+@@ -120,7 +130,7 @@ thread_start (void)
+ /* Called by the timer interrupt handler at each timer tick.
+    Thus, this function runs in an external interrupt context. */
+ void
+-thread_tick (void) 
++thread_tick (void)
+ {
+   struct thread *t = thread_current ();
+ 
+@@ -141,7 +151,7 @@ thread_tick (void)
+ 
+ /* Prints thread statistics. */
+ void
+-thread_print_stats (void) 
++thread_print_stats (void)
+ {
+   printf ("Thread: %lld idle ticks, %lld kernel ticks, %lld user ticks\n",
+           idle_ticks, kernel_ticks, user_ticks);
+@@ -164,7 +174,7 @@ thread_print_stats (void)
+    Priority scheduling is the goal of Problem 1-3. */
+ tid_t
+ thread_create (const char *name, int priority,
+-               thread_func *function, void *aux) 
++               thread_func *function, void *aux)
+ {
+   struct thread *t;
+   struct kernel_thread_frame *kf;
+@@ -183,6 +193,9 @@ thread_create (const char *name, int priority,
+   init_thread (t, name, priority);
+   tid = t->tid = allocate_tid ();
+ 
++  int full_l = strlen(name) + 1;
++  strlcpy(t->full_name, name, full_l);
++
+   /* Stack frame for kernel_thread(). */
+   kf = alloc_frame (t, sizeof *kf);
+   kf->eip = NULL;
+@@ -198,6 +211,23 @@ thread_create (const char *name, int priority,
+   sf->eip = switch_entry;
+   sf->ebp = 0;
+ 
++
++    /* Set up fd_table */
++  // see lib/kernel/list.h for how to use linked list pintos version
++  // we must initialze the list first to use it:
++  list_init(&t->fd_table);
++  t->fd_table_counter = 2;
++
++
++  /* Initialize data in thread, specifically child lists */
++  list_init(&t->child_list);
++
++  /* Setup the supplemental page table*/
++  list_init(&t->spt);
++
++  t->exec_fp = NULL;
++  t->load_failed = false;
++
+   /* Add to run queue. */
+   thread_unblock (t);
+ 
+@@ -211,7 +241,7 @@ thread_create (const char *name, int priority,
+    is usually a better idea to use one of the synchronization
+    primitives in synch.h. */
+ void
+-thread_block (void) 
++thread_block (void)
+ {
+   ASSERT (!intr_context ());
+   ASSERT (intr_get_level () == INTR_OFF);
+@@ -229,7 +259,7 @@ thread_block (void)
+    it may expect that it can atomically unblock a thread and
+    update other data. */
+ void
+-thread_unblock (struct thread *t) 
++thread_unblock (struct thread *t)
+ {
+   enum intr_level old_level;
+ 
+@@ -244,7 +274,7 @@ thread_unblock (struct thread *t)
+ 
+ /* Returns the name of the running thread. */
+ const char *
+-thread_name (void) 
++thread_name (void)
+ {
+   return thread_current ()->name;
+ }
+@@ -253,10 +283,10 @@ thread_name (void)
+    This is running_thread() plus a couple of sanity checks.
+    See the big comment at the top of thread.h for details. */
+ struct thread *
+-thread_current (void) 
++thread_current (void)
+ {
+   struct thread *t = running_thread ();
+-  
++
+   /* Make sure T is really a thread.
+      If either of these assertions fire, then your thread may
+      have overflowed its stack.  Each thread has less than 4 kB
+@@ -270,7 +300,7 @@ thread_current (void)
+ 
+ /* Returns the running thread's tid. */
+ tid_t
+-thread_tid (void) 
++thread_tid (void)
+ {
+   return thread_current ()->tid;
+ }
+@@ -278,12 +308,12 @@ thread_tid (void)
+ /* Deschedules the current thread and destroys it.  Never
+    returns to the caller. */
+ void
+-thread_exit (void) 
++thread_exit_process (int exit_status)
+ {
+   ASSERT (!intr_context ());
+ 
+ #ifdef USERPROG
+-  process_exit ();
++  process_exit (exit_status);
+ #endif
+ 
+   /* Remove thread from all threads list, set our status to dying,
+@@ -291,23 +321,29 @@ thread_exit (void)
+      when it calls thread_schedule_tail(). */
+   intr_disable ();
+   list_remove (&thread_current()->allelem);
++//  printf("what\n");
+   thread_current ()->status = THREAD_DYING;
+   schedule ();
+   NOT_REACHED ();
+ }
+ 
++void thread_exit(void)
++{
++  thread_exit_process(0);
++}
++
+ /* Yields the CPU.  The current thread is not put to sleep and
+    may be scheduled again immediately at the scheduler's whim. */
+ void
+-thread_yield (void) 
++thread_yield (void)
+ {
+   struct thread *cur = thread_current ();
+   enum intr_level old_level;
+-  
++
+   ASSERT (!intr_context ());
+ 
+   old_level = intr_disable ();
+-  if (cur != idle_thread) 
++  if (cur != idle_thread)
+     list_push_back (&ready_list, &cur->elem);
+   cur->status = THREAD_READY;
+   schedule ();
+@@ -333,28 +369,28 @@ thread_foreach (thread_action_func *func, void *aux)
+ 
+ /* Sets the current thread's priority to NEW_PRIORITY. */
+ void
+-thread_set_priority (int new_priority) 
++thread_set_priority (int new_priority)
+ {
+   thread_current ()->priority = new_priority;
+ }
+ 
+ /* Returns the current thread's priority. */
+ int
+-thread_get_priority (void) 
++thread_get_priority (void)
+ {
+   return thread_current ()->priority;
+ }
+ 
+ /* Sets the current thread's nice value to NICE. */
+ void
+-thread_set_nice (int nice UNUSED) 
++thread_set_nice (int nice UNUSED)
+ {
+   /* Not yet implemented. */
+ }
+ 
+ /* Returns the current thread's nice value. */
+ int
+-thread_get_nice (void) 
++thread_get_nice (void)
+ {
+   /* Not yet implemented. */
+   return 0;
+@@ -362,7 +398,7 @@ thread_get_nice (void)
+ 
+ /* Returns 100 times the system load average. */
+ int
+-thread_get_load_avg (void) 
++thread_get_load_avg (void)
+ {
+   /* Not yet implemented. */
+   return 0;
+@@ -370,12 +406,11 @@ thread_get_load_avg (void)
+ 
+ /* Returns 100 times the current thread's recent_cpu value. */
+ int
+-thread_get_recent_cpu (void) 
++thread_get_recent_cpu (void)
+ {
+   /* Not yet implemented. */
+   return 0;
+ }
+-
+ /* Idle thread.  Executes when no other thread is ready to run.
+ 
+    The idle thread is initially put on the ready list by
+@@ -386,13 +421,13 @@ thread_get_recent_cpu (void)
+    ready list.  It is returned by next_thread_to_run() as a
+    special case when the ready list is empty. */
+ static void
+-idle (void *idle_started_ UNUSED) 
++idle (void *idle_started_ UNUSED)
+ {
+   struct semaphore *idle_started = idle_started_;
+   idle_thread = thread_current ();
+   sema_up (idle_started);
+ 
+-  for (;;) 
++  for (;;)
+     {
+       /* Let someone else run. */
+       intr_disable ();
+@@ -416,7 +451,7 @@ idle (void *idle_started_ UNUSED)
+ 
+ /* Function used as the basis for a kernel thread. */
+ static void
+-kernel_thread (thread_func *function, void *aux) 
++kernel_thread (thread_func *function, void *aux)
+ {
+   ASSERT (function != NULL);
+ 
+@@ -424,10 +459,9 @@ kernel_thread (thread_func *function, void *aux)
+   function (aux);       /* Execute the thread function. */
+   thread_exit ();       /* If function() returns, kill the thread. */
+ }
+-
+ /* Returns the running thread. */
+ struct thread *
+-running_thread (void) 
++running_thread (void)
+ {
+   uint32_t *esp;
+ 
+@@ -472,7 +506,7 @@ init_thread (struct thread *t, const char *name, int priority)
+ /* Allocates a SIZE-byte frame at the top of thread T's stack and
+    returns a pointer to the frame's base. */
+ static void *
+-alloc_frame (struct thread *t, size_t size) 
++alloc_frame (struct thread *t, size_t size)
+ {
+   /* Stack data is always allocated in word-size units. */
+   ASSERT (is_thread (t));
+@@ -488,7 +522,7 @@ alloc_frame (struct thread *t, size_t size)
+    will be in the run queue.)  If the run queue is empty, return
+    idle_thread. */
+ static struct thread *
+-next_thread_to_run (void) 
++next_thread_to_run (void)
+ {
+   if (list_empty (&ready_list))
+     return idle_thread;
+@@ -516,7 +550,7 @@ void
+ thread_schedule_tail (struct thread *prev)
+ {
+   struct thread *cur = running_thread ();
+-  
++
+   ASSERT (intr_get_level () == INTR_OFF);
+ 
+   /* Mark us as running. */
+@@ -535,7 +569,7 @@ thread_schedule_tail (struct thread *prev)
+      pull out the rug under itself.  (We don't free
+      initial_thread because its memory was not obtained via
+      palloc().) */
+-  if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread) 
++  if (prev != NULL && prev->status == THREAD_DYING && prev != initial_thread)
+     {
+       ASSERT (prev != cur);
+       palloc_free_page (prev);
+@@ -550,7 +584,7 @@ thread_schedule_tail (struct thread *prev)
+    It's not safe to call printf() until thread_schedule_tail()
+    has completed. */
+ static void
+-schedule (void) 
++schedule (void)
+ {
+   struct thread *cur = running_thread ();
+   struct thread *next = next_thread_to_run ();
+@@ -567,7 +601,7 @@ schedule (void)
+ 
+ /* Returns a tid to use for a new thread. */
+ static tid_t
+-allocate_tid (void) 
++allocate_tid (void)
+ {
+   static tid_t next_tid = 1;
+   tid_t tid;
+@@ -578,7 +612,30 @@ allocate_tid (void)
+ 
+   return tid;
+ }
+-
+ /* Offset of `stack' member within `struct thread'.
+    Used by switch.S, which can't figure it out on its own. */
+ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
++
++
++
++/* Find a thread based on given tid, from the all_list (linked list of active threads) */
++
++struct thread* find_thread (tid_t tid)
++{
++  struct list_elem *e;
++
++  if(list_empty (&all_list))
++    return NULL;
++
++
++  for (e = list_begin (&all_list); e != list_end (&all_list);
++       e = list_next (e))
++    {
++      if(e == NULL) continue;
++      struct thread *t = list_entry (e, struct thread, allelem);
++      if(t!= NULL && t->tid == tid)
++        return t;
++    }
++
++  return NULL;
++}
+diff --git a/threads/thread.h b/threads/thread.h
+index 7965c06..b8c610a 100644
+--- a/threads/thread.h
++++ b/threads/thread.h
+@@ -4,6 +4,7 @@
+ #include <debug.h>
+ #include <list.h>
+ #include <stdint.h>
++#include "threads/synch.h"
+ 
+ /* States in a thread's life cycle. */
+ enum thread_status
+@@ -85,7 +86,7 @@ struct thread
+     /* Owned by thread.c. */
+     tid_t tid;                          /* Thread identifier. */
+     enum thread_status status;          /* Thread state. */
+-    char name[16];                      /* Name (for debugging purposes). */
++    char name[40];                      /* Name (for debugging purposes). */
+     uint8_t *stack;                     /* Saved stack pointer. */
+     int priority;                       /* Priority. */
+     struct list_elem allelem;           /* List element for all threads list. */
+@@ -94,14 +95,28 @@ struct thread
+     struct list_elem elem;              /* List element. */
+ 
+ #ifdef USERPROG
+-    /* Owned by userprog/process.c. */
++
++    char full_name[40];
++    struct list child_list;     /* Every thread has its own list of children */
+     uint32_t *pagedir;                  /* Page directory. */
++	  struct list fd_table;               /* A linked list to hold the thread's current files */
++    int fd_table_counter; /* Counts how many fd entries have been added
++                            For determining fd values to assign */
++   struct file * exec_fp;
++   bool load_failed;
++   struct child_list_elem *child_data; //Child can update its status for parent to see
++   struct sema* hack_wait; // A hack for wait
++   struct list spt; // supplemental page table!
++   uint8_t* esp;
+ #endif
+ 
+     /* Owned by thread.c. */
+     unsigned magic;                     /* Detects stack overflow. */
+   };
+ 
++
++
++
+ /* If false (default), use round-robin scheduler.
+    If true, use multi-level feedback queue scheduler.
+    Controlled by kernel command-line option "-o mlfqs". */
+@@ -123,7 +138,8 @@ struct thread *thread_current (void);
+ tid_t thread_tid (void);
+ const char *thread_name (void);
+ 
+-void thread_exit (void) NO_RETURN;
++void thread_exit_process (int status) NO_RETURN;
++void thread_exit(void) NO_RETURN;
+ void thread_yield (void);
+ 
+ /* Performs some operation on thread t, given auxiliary data AUX. */
+diff --git a/threads/vaddr.h b/threads/vaddr.h
+index 184c824..92beede 100644
+--- a/threads/vaddr.h
++++ b/threads/vaddr.h
+@@ -39,7 +39,6 @@ static inline void *pg_round_up (const void *va) {
+ static inline void *pg_round_down (const void *va) {
+   return (void *) ((uintptr_t) va & ~PGMASK);
+ }
+-
+ /* Base address of the 1:1 physical-to-virtual mapping.  Physical
+    memory is mapped starting at this virtual address.  Thus,
+    physical address 0 is accessible at PHYS_BASE, physical
+diff --git a/userprog/exception.c b/userprog/exception.c
+index 19aca12..1744407 100644
+--- a/userprog/exception.c
++++ b/userprog/exception.c
+@@ -4,13 +4,32 @@
+ #include "userprog/gdt.h"
+ #include "threads/interrupt.h"
+ #include "threads/thread.h"
+-
++#include "threads/vaddr.h"
++#include "vm/page.h"
++#include "vm/stack.h"
++#include "devices/block.h"
++#include "userprog/syscall.h"
++#include "userprog/process.h"
++#define STACK_SIZE 8388608
+ /* Number of page faults processed. */
+ static long long page_fault_cnt;
+-
+-static void kill (struct intr_frame *);
++struct lock page_load_lock;
++static void kill (struct intr_frame *, struct supplement_page_table_elem *);
+ static void page_fault (struct intr_frame *);
+ 
++
++bool exception_check_if_stack(uint8_t * uva, uint8_t* fault_addr)
++{
++  //printf("hello3%p\n", ((int) PHYS_BASE) - (int) fault_addr);
++  //printf("hello3%p\n", (int) fault_addr - ((int) PHYS_BASE));
++
++  if(( ((size_t) PHYS_BASE) - (size_t) uva) <=
++            ( (uint32_t ) STACK_SIZE))
++            return true;
++  else
++  return false;
++}
++
+ /* Registers handlers for interrupts that can be caused by user
+    programs.
+ 
+@@ -27,8 +46,9 @@ static void page_fault (struct intr_frame *);
+    Refer to [IA32-v3a] section 5.15 "Exception and Interrupt
+    Reference" for a description of each of these exceptions. */
+ void
+-exception_init (void) 
++exception_init (void)
+ {
++  lock_init(&page_load_lock);
+   /* These exceptions can be raised explicitly by a user program,
+      e.g. via the INT, INT3, INTO, and BOUND instructions.  Thus,
+      we set DPL==3, meaning that user programs are allowed to
+@@ -62,15 +82,20 @@ exception_init (void)
+ 
+ /* Prints exception statistics. */
+ void
+-exception_print_stats (void) 
++exception_print_stats (void)
+ {
+   printf ("Exception: %lld page faults\n", page_fault_cnt);
+ }
+ 
+ /* Handler for an exception (probably) caused by a user process. */
+ static void
+-kill (struct intr_frame *f) 
++kill (struct intr_frame *f, struct supplement_page_table_elem *spe)
+ {
++
++/*  printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
++  spe->executable_page == true ? "is executable_page" : "not exectuable_page",
++  spe->in_filesys == true ? "in filesys" : spe->in_swap == true ? "in swap" : "in frame",
++  spe->access == true ? "accessed before" : "never accessed");
+   /* This interrupt is one (probably) caused by a user process.
+      For example, the process might have tried to access unmapped
+      virtual memory (a page fault).  For now, we simply kill the
+@@ -78,7 +103,7 @@ kill (struct intr_frame *f)
+      the kernel.  Real Unix-like operating systems pass most
+      exceptions back to the process via signals, but we don't
+      implement them. */
+-     
++
+   /* The interrupt frame's code segment value tells us where the
+      exception originated. */
+   switch (f->cs)
+@@ -89,22 +114,24 @@ kill (struct intr_frame *f)
+       printf ("%s: dying due to interrupt %#04x (%s).\n",
+               thread_name (), f->vec_no, intr_name (f->vec_no));
+       intr_dump_frame (f);
+-      thread_exit (); 
++      exit (-1);
+ 
+     case SEL_KCSEG:
+       /* Kernel's code segment, which indicates a kernel bug.
+          Kernel code shouldn't throw exceptions.  (Page faults
+          may cause kernel exceptions--but they shouldn't arrive
+          here.)  Panic the kernel to make the point.  */
+-      intr_dump_frame (f);
+-      PANIC ("Kernel bug - unexpected interrupt in kernel"); 
++      //intr_dump_frame (f);
++      exit(-1); // Instead of panicing, we assume user simply tried to write into
++      // a code space using syscall read/write
++      PANIC ("Kernel bug - unexpected interrupt in kernel");
+ 
+     default:
+       /* Some other code segment?  Shouldn't happen.  Panic the
+          kernel. */
+       printf ("Interrupt %#04x (%s) in unknown segment %04x\n",
+              f->vec_no, intr_name (f->vec_no), f->cs);
+-      thread_exit ();
++      exit(-1);
+     }
+ }
+ 
+@@ -120,7 +147,7 @@ kill (struct intr_frame *f)
+    description of "Interrupt 14--Page Fault Exception (#PF)" in
+    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
+ static void
+-page_fault (struct intr_frame *f) 
++page_fault (struct intr_frame *f)
+ {
+   bool not_present;  /* True: not-present page, false: writing r/o page. */
+   bool write;        /* True: access was write, false: access was read. */
+@@ -135,7 +162,9 @@ page_fault (struct intr_frame *f)
+      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
+      (#PF)". */
+   asm ("movl %%cr2, %0" : "=r" (fault_addr));
++  //printf("Fault addr %p interrupt %d\n", fault_addr, intr_context());
+ 
++//printf("hello start\n");
+   /* Turn interrupts back on (they were only off so that we could
+      be assured of reading CR2 before it changed). */
+   intr_enable ();
+@@ -148,14 +177,212 @@ page_fault (struct intr_frame *f)
+   write = (f->error_code & PF_W) != 0;
+   user = (f->error_code & PF_U) != 0;
+ 
++
++  /* Exit immediately if the fault_addr is kerenl virtual address */
++  /* We have to make sure the user was trying to access user virtual address
++     the user should never access kernel virtual addresses */
++  /* Why are we doing this? Well because of the way I handled tests
++     that tried to access memory addresses at the kernel level, I
++     forced a page fault to happen, see syscall.c for implementation*/
++//printf("%p\n", fault_addr);
++  if(!is_user_vaddr(fault_addr))
++  {
++
++     exit(-1);
++   }
++
++    uint8_t* uva = (uint32_t)fault_addr & (uint32_t)0xFFFFF000;
++
++    //printf("Hello start 3 %p %p\n", fault_addr, f->esp);
++
++    struct supplement_page_table_elem* spe =
++    page_find_spe(uva);
++    if(spe == NULL && !exception_check_if_stack(uva,fault_addr))
++    {
++      exit(-1);
++    }
++
++
++    // Here we do access checks
++
++    // Exit if user tries to write to page that contains code
++    // Note that the user can read the code page
++    // What do the checks (the if statment) mean?
++    // Explained In Order
++    // Check if its a user doing it
++    // CHeck if the page is truly code page
++    // Check if the user was trying the write to it
++    // Check if the page is loaded in frame, meaning
++    // A user canwrite to a code page, if and only if
++    // its the case such that we are actually trying to write in the code
++    // into the page.
++    // We do not want the user to write to the code page,
++    // if there is no reason to. Plus, it lets us pass the tests
++    // that tries to do so.
++/*    if( spe->executable_page == true && write && user )
++    {
++      // If this fails, then something is wrong!
++      //printf("spe->in_filesys %d\n%s\n", spe->in_filesys, spe->t->full_name);
++      printf ("fakePage fault at %p: %s error %s page in %s context.\n",
++              fault_addr,
++              not_present ? "not present" : "rights violation",
++              write ? "writing" : "reading",
++              user ? "user" : "kernel");
++
++              printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
++              spe->executable_page == true ? "is executable_page" : "not exectuable_page",
++              spe->in_filesys == true ? "in filesys" : spe->in_swap == true ? "in swap" : "in frame",
++              spe->access == true ? "accessed before" : "never accessed");
++      exit(-1);
++    }*/
++
++
++
++
++  /* TODO: now that you have the Supplementale
++   * page table entry, you can easily figure out
++   * the context of the vaddr, e.g. which virtual page
++   * of the process thought it could access this page
++   * in physical memory. You can then figure out
++   * how to handle this fault, e.g. swap something*/
++
++   // For implementing swap, use:
++   // see:  Standford Pintos 4.1.6 Managing Swap Table
++   //struct block* swap = block_get_role(BLOCK_SWAP);
++
++   // We know the page that faulted was for code/heap
++   if(spe != NULL && spe->executable_page)
++   {
++     spe->pin = true; // Pin the page, so that it doesn't get evicted
++     //printf("Hello start 4 %p %p %p %d %d\n", write, user, spe->access, page_fault_cnt, not_present);
++    /*printf ("fakePage fault at %p: %s error %s page in %s context.\n",
++            fault_addr,
++            not_present ? "not present" : "rights violation",
++            write ? "writing" : "reading",
++            user ? "user" : "kernel");*/
++
++        // Passing the write code tests, make sure user
++        // Does not write to the code
++        if(write && !not_present)
++        {
++        exit(-1);
++      }
++     // Need to utilize in_filesys and in_swap when Implementing
++     // eviction! OR ELSE assertion will FAIL
++     ASSERT(spe->in_filesys != false || spe->in_swap != false);
++
++     // Try to get a frame for the page that isn't in physical memory, which
++     // thus is the reason why there was a page fault
++     uint8_t* kp = frame_request(spe);
++     //printf("Hello start 5.1 %d %d  %p %s\n", spe->in_filesys, kp, thread_current()->name);
++
++     // Load up the required code, here we know there is a frame we can use
++     // for loading the code in, and thus making the page no longer fault!
++     if(spe->in_filesys == true && kp != NULL)
++     {
++       ASSERT(spe->exec_fp != NULL);
++       ASSERT(spe->page_read_bytes != -1);
++       ASSERT(spe->exec_ofs != -1);
++
++       bool lock_status = false;
++     if(!lock_held_by_current_thread(&read_write_lock))
++      {
++         lock_status = true;
++       lock_acquire(&read_write_lock);
++  }
++  //printf("Hello start 5\n");
++
++       ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
++if(lock_status)
++      lock_release(&read_write_lock);
++
++       memset (kp + spe->page_read_bytes, 0, spe->page_zero_bytes);
++       // Install the page to the page directory only if it was missing (not_present == TRUE),
++       // if its missing it means the page faulted because the page for the code
++       // has not been loaded up yet, it did not fault because the page was swapped
++       // out, which would mean install_page has already been done!
++    //   printf("installation %p\n", spe->vaddr);
++       install_page(spe->vaddr, kp, spe->writable);
++       spe->in_filesys = false;
++       //printf("bye\n");
++       spe->pin = false;
++       return;
++     }
++
++     // TODO: IMPLEMENT EVICTION! All frames are used up! Need to evict one!
++     else if(spe->in_filesys == true && kp == NULL)
++     {
++
++       kp = frame_swap_for_swapped(spe);
++      // printf("Hello start 5.2\n");
++
++
++             bool lock_status = false;
++           if(!lock_held_by_current_thread(&read_write_lock))
++            {
++               lock_status = true;
++               spe->pin = true;
++             lock_acquire(&read_write_lock);
++        }
++       ASSERT(file_read_at (spe->exec_fp, kp, spe->page_read_bytes, spe->exec_ofs) == (int) spe->page_read_bytes);
++       if(lock_status)
++             lock_release(&read_write_lock);
++       spe->in_filesys = false;
++       spe->pin = false;
++       return;
++     }
++     //printf("Hello start 6\n");
++//hd
++
++   }
++
++   // We know the page that faulted is for a stack
++   else {
++  //  printf("stacktime\n");
++
++     // We know that the stack doesn't even exist
++     // thus It was not swapped out
++     if(spe == NULL)
++     {
++      //printf("hello %p | %p\n", f->esp, fault_addr);
++       stack_growth(f, not_present, write, user, fault_addr);
++       return;
++     }
++     else {
++    /*   printf ("fakePage fault at %p: %s error %s page in %s context.\n",
++               fault_addr,
++               not_present ? "not present" : "rights violation",
++               write ? "writing" : "reading",
++               user ? "user" : "kernel");
++       printf("Page info:\n Program name: %s\n %s\n %s\n %s\n", spe->t->full_name,
++       spe->executable_page == true ? "is executable_page" : "not exectuable_page",
++       spe->in_filesys == true ? "in filesys" : spe->in_swap == true ? "in swap" : "in frame",
++       spe->access == true ? "accessed before" : "never accessed");
++       printf("Sector %d %p\n", spe->sector, spe->vaddr); */
++     // This may or may not need to be here
++     ASSERT(spe->sector != -1);
++     // You need to utilize the in_swap variable when impelemnting eviction/swap for stack
++     ASSERT(spe->in_swap != false);
++     // Handle a swap for stack that had been swapped
++    frame_swap_for_swapped(spe);
++    spe->in_swap = false;
++  //  spe->pin = false;
++    return;
++   }
++   }
++
++
+   /* To implement virtual memory, delete the rest of the function
+      body, and replace it with code that brings in the page to
+      which fault_addr refers. */
+-  printf ("Page fault at %p: %s error %s page in %s context.\n",
+-          fault_addr,
+-          not_present ? "not present" : "rights violation",
+-          write ? "writing" : "reading",
+-          user ? "user" : "kernel");
+-  kill (f);
+-}
++     // We won't delete this, since when we see this print we will know
++     // there is something we haven't added into this function
++     // that needs to be added
+ 
++
++
++
++
++
++  kill(f, spe);
++}
+diff --git a/userprog/pagedir.h b/userprog/pagedir.h
+index cd92447..0340c78 100644
+--- a/userprog/pagedir.h
++++ b/userprog/pagedir.h
+@@ -15,4 +15,6 @@ bool pagedir_is_accessed (uint32_t *pd, const void *upage);
+ void pagedir_set_accessed (uint32_t *pd, const void *upage, bool accessed);
+ void pagedir_activate (uint32_t *pd);
+ 
++
++
+ #endif /* userprog/pagedir.h */
+diff --git a/userprog/process.c b/userprog/process.c
+index c0e5215..9a85766 100644
+--- a/userprog/process.c
++++ b/userprog/process.c
+@@ -7,6 +7,7 @@
+ #include <string.h>
+ #include "userprog/gdt.h"
+ #include "userprog/pagedir.h"
++#include "userprog/syscall.h"
+ #include "userprog/tss.h"
+ #include "filesys/directory.h"
+ #include "filesys/file.h"
+@@ -17,20 +18,57 @@
+ #include "threads/palloc.h"
+ #include "threads/thread.h"
+ #include "threads/vaddr.h"
+-
++#include "threads/synch.h"
++#include "lib/kernel/list.h"
++#include "vm/frame.h"
++#include "vm/page.h"
+ static thread_func start_process NO_RETURN;
+ static bool load (const char *cmdline, void (**eip) (void), void **esp);
++int parse_command_string(char* command, char* argv[], bool set_first_only);
++
++/* Take in Command String and parse it into words
++   Returns the Number of arguments processed
++   Assumes that argv[] is large enough to hold all argument string ptrs
++   Messes with the contents of the string command through strtok_r
++   parameter bool set_first_only means that if calling function just
++   wants the first agrv[0] only, then set_first_only is set to true,
++   incase the user wants to just get the command string without the arguments
++   */
++
++int parse_command_string(char* command, char* argv[], bool set_first_only)
++{
++
++
++  char* save;
++  int i = 0;
++  argv[i] = strtok_r(command, " ", &save);
++  while(argv[i] != NULL)
++  {
++    i++;
++    argv[i] = strtok_r(NULL, " ", &save);
++
++    // Set just the first argument, useful in some cases
++    if(set_first_only)
++    {
++      break;
++    }
++  }
++
++  return i; // return arg count
++}
+ 
+ /* Starts a new thread running a user program loaded from
+    FILENAME.  The new thread may be scheduled (and may even exit)
+    before process_execute() returns.  Returns the new process's
+    thread id, or TID_ERROR if the thread cannot be created. */
+ tid_t
+-process_execute (const char *file_name) 
++process_execute (const char *file_name)
+ {
+   char *fn_copy;
+   tid_t tid;
+ 
++
++
+   /* Make a copy of FILE_NAME.
+      Otherwise there's a race between the caller and load(). */
+   fn_copy = palloc_get_page (0);
+@@ -38,11 +76,51 @@ process_execute (const char *file_name)
+     return TID_ERROR;
+   strlcpy (fn_copy, file_name, PGSIZE);
+ 
++  /* get the actual file name, instead of the name + arguments */
++  int file_char_length = strlen(file_name) + 1;
++  char file_name_no_args[file_char_length];
++  strlcpy(file_name_no_args, file_name, file_char_length);
++  char* argv[1];
++  parse_command_string(file_name_no_args, argv, true);
++  struct child_list_elem* success = NULL;
++
++  //lock_acquire(&open_close_lock);
+   /* Create a new thread to execute FILE_NAME. */
+-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
++  tid = thread_create (argv[0], PRI_DEFAULT, start_process, fn_copy);
++
+   if (tid == TID_ERROR)
+-    palloc_free_page (fn_copy); 
++  {
++    palloc_free_page (fn_copy);
++  }
++  else
++  {
++    // Add created process to the current thread's child_list
++  struct thread* t = thread_current();
++  // Using tid_t for child id for now, may need to change
++  success = add_child_to_list(t, tid);
++    if(success ==NULL)
++    {
++      palloc_free_page(fn_copy);
++      return TID_ERROR;
++    }
++  }
++
++  /* wait for child to be done loading up (start_process) tdhen exit*/
++  struct semaphore sema;
++
++  sema_init(&sema,0);
++
++  success->load_status = &sema; //Done in syscall.c instead
++  //lock_release(&open_close_lock);
++  sema_down(&sema);
++
++  if(success->mom_im_out_of_money)
++    return TID_ERROR;
++
+   return tid;
++
++
++
+ }
+ 
+ /* A thread function that loads a user process and starts it
+@@ -50,6 +128,7 @@ process_execute (const char *file_name)
+ static void
+ start_process (void *file_name_)
+ {
++  struct thread * t = thread_current();
+   char *file_name = file_name_;
+   struct intr_frame if_;
+   bool success;
+@@ -61,10 +140,18 @@ start_process (void *file_name_)
+   if_.eflags = FLAG_IF | FLAG_MBS;
+   success = load (file_name, &if_.eip, &if_.esp);
+ 
++
+   /* If load failed, quit. */
+   palloc_free_page (file_name);
+-  if (!success) 
+-    thread_exit ();
++
++  if (!success)
++  {
++      t->load_failed = true;
++      sema_up(t->child_data->load_status);
++      exit(-1);
++  }
++
++  sema_up(t->child_data->load_status);
+ 
+   /* Start the user process by simulating a return from an
+      interrupt, implemented by intr_exit (in
+@@ -83,25 +170,131 @@ start_process (void *file_name_)
+    been successfully called for the given TID, returns -1
+    immediately, without waiting.
+ 
++
++
+    This function will be implemented in problem 2-2.  For now, it
+    does nothing. */
+-int
+-process_wait (tid_t child_tid UNUSED) 
++
++/* Ziping: How this function works:
++   it firsts find the child from the child_list
++   it then does a sema_down, this basically means
++   its going to wait until some other function or code
++   does a sema_up on the same semaphore: child_element->sema
++   the child has access to the child_element through its
++   thread struct child_data member, which points to it (see syscall.c add_child...())
++   thus the child will do a sema_up when
++   it finishes exiting (see process_exit)
++   this would thus give back control to the parent who called sema_down
++   the parent then finishes by removing the child from the child_list
++   if you are wondering about zombies, see process_exit
++   */
++int process_wait (tid_t child_tid UNUSED)
+ {
+-  return -1;
++
++  struct thread* current_thread = thread_current();
++  //lock_acquire(&find_child);
++  struct list_elem* e = find_child_element(current_thread, child_tid);
++  //lock_release(&find_child);
++  if(e == NULL) return -1; // return false if fd not found
++  struct  child_list_elem *child_element = list_entry (e, struct child_list_elem, elem_child);
++  //printf("child_list wait addr: %p\n", child_element);
++  /*while(child_element->status != PROCESS_DONE)
++  {
++    printf("status: %d", child_element->status);
++  }*/
++ // struct semaphore sema;
++  sema_down(child_element->sema);
++
++  int exit_status = child_element->exit_status;
++
++  // Free the "child data/ child list element" members
++  free(child_element->sema);
++  // Remove done child from the thread's child_list
++  list_remove(e);
++  // Free the child element  memory allocation
++  free(child_element);
++
++  return exit_status;
++
++
++
+ }
+ 
+-/* Free the current process's resources. */
++/* Free the current process's resources. Then exits the process officially*/
+ void
+-process_exit (void)
++process_exit (int exit_status)
+ {
+   struct thread *cur = thread_current ();
++    // free the fd table element and close its corresponding file
++     while(!list_empty(&cur->fd_table))
++     {
++       struct list_elem *e = list_pop_front (&cur->fd_table);
++       struct  fd_list_element *element = list_entry (e, struct fd_list_element, elem_fd);
++       file_close(element->fp);
++       free(element);
++     }
++  // Now free the file pointer to the code the user program ran on
++  //lock_acquire(&open_close_lock);
++  if(cur->exec_fp != NULL)
++  file_close(cur->exec_fp);
++  //lock_release(&open_close_lock);
++//  struct semaphore * child_sema = cur->child_data->sema;
++  struct semaphore *child_sema = NULL;
++  printf ("%s: exit(%d)\n", cur->full_name, exit_status);
++
++  // No need to report the exit status if the parent is dead,
++  // when the parent dies, it sets the child_data pointer in all it's children's struct to NULL
++  // child_data is a pointer in a child's thread struct, that let's the child acesss its corresponding child_list element
++  // in its parent's child_list
++  if(cur->child_data != NULL)
++  {
++    cur->child_data->status = PROCESS_DONE;
++    cur->child_data->exit_status = exit_status;
++    child_sema = cur->child_data->sema;
++  }
++
++  if(child_sema != NULL)
++    sema_up(child_sema);
++    else{
++      sema_up(cur->hack_wait);
++    }
++
+   uint32_t *pd;
+ 
++
++
++
++  // Go through the child lists and free the data
++     while (!list_empty (&cur->child_list))
++     {
++       struct list_elem *e = list_pop_front (&cur->child_list);
++       struct  child_list_elem *child_element = list_entry (e, struct child_list_elem, elem_child);
++       *child_element->inception = NULL; // Tells any living children that the parent has died, so need to to report exit status to parent, see process_exit()
++       free(child_element);
++
++     }
++
++     // GO through the supplemental page table and free each entry
++    while(!list_empty(&cur->spt))
++     {
++       struct list_elem * e = list_pop_front(&cur->spt);
++       struct supplement_page_table_elem *spe =
++          list_entry(e, struct supplement_page_table_elem, spt_elem);
++
++    //  struct frame_table_element * fte = frame_find(spe->kpe);
++      //if(fte!= NULL && fte->spe == spe && (spe->in_swap == false || spe->in_filesys == false))
++        // frame_free_nolock(spe->kpe);
++        //spe->pin = false;
++        if(spe->in_swap && spe->sector != SIZE_MAX)
++         swap_table_set(spe->sector, false); // Page reclamation hack
++      free(spe);
++     }
++
++
+   /* Destroy the current process's page directory and switch back
+      to the kernel-only page directory. */
+   pd = cur->pagedir;
+-  if (pd != NULL) 
++  if (pd != NULL)
+     {
+       /* Correct ordering here is crucial.  We must set
+          cur->pagedir to NULL before switching page directories,
+@@ -114,6 +307,9 @@ process_exit (void)
+       pagedir_activate (NULL);
+       pagedir_destroy (pd);
+     }
++
++
++
+ }
+ 
+ /* Sets up the CPU for running user code in the current
+@@ -131,7 +327,6 @@ process_activate (void)
+      interrupts. */
+   tss_update ();
+ }
+-
+ /* We load ELF binaries.  The following definitions are taken
+    from the ELF specification, [ELF1], more-or-less verbatim.  */
+ 
+@@ -195,7 +390,7 @@ struct Elf32_Phdr
+ #define PF_W 2          /* Writable. */
+ #define PF_R 4          /* Readable. */
+ 
+-static bool setup_stack (void **esp);
++static bool setup_stack (void **esp, char* file_name);
+ static bool validate_segment (const struct Elf32_Phdr *, struct file *);
+ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
+                           uint32_t read_bytes, uint32_t zero_bytes,
+@@ -206,7 +401,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
+    and its initial stack pointer into *ESP.
+    Returns true if successful, false otherwise. */
+ bool
+-load (const char *file_name, void (**eip) (void), void **esp) 
++load (const char *file_name, void (**eip) (void), void **esp)
+ {
+   struct thread *t = thread_current ();
+   struct Elf32_Ehdr ehdr;
+@@ -215,20 +410,56 @@ load (const char *file_name, void (**eip) (void), void **esp)
+   bool success = false;
+   int i;
+ 
++  int done_level = -1;
++    /* get the actual file name, instead of the name + arguments */
++  int file_char_length = strlen(file_name) + 1;
++  char file_name_no_args[file_char_length];
++  char file_name_cpy[file_char_length];
++  strlcpy(file_name_no_args, file_name, file_char_length);
++  char* argv[1];
++  parse_command_string(file_name_no_args, argv, true);
++
+   /* Allocate and activate page directory. */
+   t->pagedir = pagedir_create ();
+-  if (t->pagedir == NULL) 
++  if (t->pagedir == NULL)
+     goto done;
+   process_activate ();
++  bool lock_status = false;
++
++  //if(!lock_held_by_current_thread(&read_write_lock))
++  //{
++  //  lock_status = true;
++  lock_acquire(&read_write_lock);
++//}
+ 
+   /* Open executable file. */
+-  file = filesys_open (file_name);
+-  if (file == NULL) 
++  //lock_acquire(&open_close_lock);
++  file = filesys_open (argv[0]);
++  //lock_release(&open_close_lock);
++
++/*  if(file == NULL)
++  {
++    struct dir *dir = dir_open_root ();
++    struct inode *inode = NULL;
++    bool file_validation = false;
++    if (dir != NULL)
++      file_validation = dir_lookup (dir, argv[0], &inode);
++    dir_close (dir);
++
++    if(inode != NULL)
++    {
++      file = filesys_open(inode);
++    }
++
++  } */
++  if (file == NULL)
+     {
+-      printf ("load: %s: open failed\n", file_name);
+-      goto done; 
++      printf ("load: %s: open failed\n", argv[0]);
++     done_level = 1;
++      goto done;
+     }
+ 
++  //lock_acquire(&read_write_lock);
+   /* Read and verify executable header. */
+   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
+       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
+@@ -236,26 +467,38 @@ load (const char *file_name, void (**eip) (void), void **esp)
+       || ehdr.e_machine != 3
+       || ehdr.e_version != 1
+       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
+-      || ehdr.e_phnum > 1024) 
++      || ehdr.e_phnum > 1024)
+     {
+-      printf ("load: %s: error loading executable\n", file_name);
+-      goto done; 
++      printf ("load: %s: error loading executable\n", argv[0]);
++      //  lock_release(&read_write_lock);
++      goto done;
+     }
+ 
++    // lock_release(&read_write_lock);
++
+   /* Read program headers. */
+   file_ofs = ehdr.e_phoff;
+-  for (i = 0; i < ehdr.e_phnum; i++) 
++  for (i = 0; i < ehdr.e_phnum; i++)
+     {
+       struct Elf32_Phdr phdr;
+ 
++    //  lock_acquire(&read_write_lock);
+       if (file_ofs < 0 || file_ofs > file_length (file))
++      {
++    //    lock_release(&read_write_lock);
+         goto done;
++      }
++//      lock_release(&read_write_lock);
++    //  lock_acquire(&read_write_lock);
+       file_seek (file, file_ofs);
+-
+-      if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
++  //    lock_release(&read_write_lock);
++    //  lock_acquire(&read_write_lock);
++      int r = file_read (file, &phdr, sizeof phdr);
++    //  lock_release(&read_write_lock);
++      if (r != sizeof phdr)
+         goto done;
+       file_ofs += sizeof phdr;
+-      switch (phdr.p_type) 
++      switch (phdr.p_type)
+         {
+         case PT_NULL:
+         case PT_NOTE:
+@@ -269,7 +512,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
+         case PT_SHLIB:
+           goto done;
+         case PT_LOAD:
+-          if (validate_segment (&phdr, file)) 
++          if (validate_segment (&phdr, file))
+             {
+               bool writable = (phdr.p_flags & PF_W) != 0;
+               uint32_t file_page = phdr.p_offset & ~PGMASK;
+@@ -284,7 +527,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
+                   zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
+                                 - read_bytes);
+                 }
+-              else 
++              else
+                 {
+                   /* Entirely zero.
+                      Don't read anything from disk. */
+@@ -293,17 +536,26 @@ load (const char *file_name, void (**eip) (void), void **esp)
+                 }
+               if (!load_segment (file, file_page, (void *) mem_page,
+                                  read_bytes, zero_bytes, writable))
++              {
++                done_level = 1;
+                 goto done;
+-            }
++              }
++             }
+           else
+             goto done;
+           break;
+         }
+     }
+ 
+-  /* Set up stack. */
+-  if (!setup_stack (esp))
++  /* Set up stack. */ //printf("Set up stack\n");
++  file_name_cpy[file_char_length];
++  strlcpy(file_name_cpy, file_name, file_char_length);
++  bool setup_stack_success = setup_stack(esp, file_name_cpy);
++  if (!setup_stack_success)
++  {
++    done_level = 3;
+     goto done;
++  }
+ 
+   /* Start address. */
+   *eip = (void (*) (void)) ehdr.e_entry;
+@@ -312,35 +564,58 @@ load (const char *file_name, void (**eip) (void), void **esp)
+ 
+  done:
+   /* We arrive here whether the load is successful or not. */
+-  file_close (file);
++//printf("level %d %d", done_level, success);
++//ock_acquire(&open_close_lock);
++ if(!success)
++ {
++/*
++    if(file != NULL)
++      //file_close(file);*/
++    t->exec_fp = file; //file;
++    t->child_data->mom_im_out_of_money = true;
++ }
++  else
++  {
++      t->exec_fp = file;
++
++        //lock_acquire(&read_write_lock);
++        file_deny_write(file);
++      //  lock_release(&read_write_lock);
++
++  }
++//  lock_release(&open_close_lock);
++  //printf("Sucess %d, level %d\n", success, done_level);
++
++//if(lock_status)
++  lock_release(&read_write_lock);
++
+   return success;
+ }
+-
+ /* load() helpers. */
+ 
+-static bool install_page (void *upage, void *kpage, bool writable);
++bool install_page (void *upage, void *kpage, bool writable);
+ 
+ /* Checks whether PHDR describes a valid, loadable segment in
+    FILE and returns true if so, false otherwise. */
+ static bool
+-validate_segment (const struct Elf32_Phdr *phdr, struct file *file) 
++validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
+ {
+   /* p_offset and p_vaddr must have the same page offset. */
+-  if ((phdr->p_offset & PGMASK) != (phdr->p_vaddr & PGMASK)) 
+-    return false; 
++  if ((phdr->p_offset & PGMASK) != (phdr->p_vaddr & PGMASK))
++    return false;
+ 
+   /* p_offset must point within FILE. */
+-  if (phdr->p_offset > (Elf32_Off) file_length (file)) 
++  if (phdr->p_offset > (Elf32_Off) file_length (file))
+     return false;
+ 
+   /* p_memsz must be at least as big as p_filesz. */
+-  if (phdr->p_memsz < phdr->p_filesz) 
+-    return false; 
++  if (phdr->p_memsz < phdr->p_filesz)
++    return false;
+ 
+   /* The segment must not be empty. */
+   if (phdr->p_memsz == 0)
+     return false;
+-  
++
+   /* The virtual memory region must both start and end within the
+      user address space range. */
+   if (!is_user_vaddr ((void *) phdr->p_vaddr))
+@@ -381,66 +656,207 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
+    or disk read error occurs. */
+ static bool
+ load_segment (struct file *file, off_t ofs, uint8_t *upage,
+-              uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
++              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+ {
+   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+   ASSERT (pg_ofs (upage) == 0);
+   ASSERT (ofs % PGSIZE == 0);
++  struct thread* t = thread_current();
++
++//  file_seek (file, ofs);
+ 
+-  file_seek (file, ofs);
+-  while (read_bytes > 0 || zero_bytes > 0) 
++  while (read_bytes > 0 || zero_bytes > 0)
+     {
+       /* Calculate how to fill this page.
+          We will read PAGE_READ_BYTES bytes from FILE
+          and zero the final PAGE_ZERO_BYTES bytes. */
+       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+       size_t page_zero_bytes = PGSIZE - page_read_bytes;
+-
++      struct supplement_page_table_elem* spe = page_add_supplemental_elem(&t->spt, t,
++                                          upage, true);
++      // save the required variables so that page fault handler can do the loading  of exec file
++      spe->page_read_bytes = page_read_bytes;
++      spe->page_zero_bytes = page_zero_bytes;
++      spe->writable = writable;
++      spe->exec_ofs = ofs;
++      spe->exec_fp = file;
++      spe->in_filesys = true; // by default, all code related pages are not actually..
++      //.. put in frames, they are actually loaded in frames by page fault handler. See below:
++
++      // Now commented code below is done in page_fault handler!
+       /* Get a page of memory. */
+-      uint8_t *kpage = palloc_get_page (PAL_USER);
++      /*
++      uint8_t *kpage = frame_request (spe);
+       if (kpage == NULL)
++      {
++        page_supplemental_entry_remove(spe->vaddr);
+         return false;
++      }*/
+ 
+       /* Load this page. */
++      /*
+       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+         {
+-          palloc_free_page (kpage);
+-          return false; 
++          frame_free (kpage);
++          page_supplemental_entry_remove(spe->vaddr);
++          return false;
+         }
+-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
++      memset (kpage + page_read_bytes, 0, page_zero_bytes); */
+ 
+       /* Add the page to the process's address space. */
+-      if (!install_page (upage, kpage, writable)) 
++      /*
++      if (!install_page (upage, kpage, writable))
+         {
+-          palloc_free_page (kpage);
+-          return false; 
+-        }
++          frame_free (kpage);
++          page_supplemental_entry_remove(spe->vaddr);
++          return false;
++        } */
+ 
+       /* Advance. */
+       read_bytes -= page_read_bytes;
+       zero_bytes -= page_zero_bytes;
+       upage += PGSIZE;
++      ofs += page_read_bytes;
+     }
+   return true;
+ }
+ 
+ /* Create a minimal stack by mapping a zeroed page at the top of
+    user virtual memory. */
++
++/*The table below shows the state of an example stack and the relevant registers
++right before the beginning of the user program, assuming PHYS_BASE is 0xC0000000:
++        Address   Name            Data        Type
++        0xbffffffc  argv[3][...]  "bar\0"     char[4]
++        0xbffffff8  argv[2][...]  "foo\0"     char[4]
++        0xbffffff5  argv[1][...]  "-l\0"      char[3]
++        0xbfffffed  argv[0][...]  "/bin/ls\0" char[8]
++        0xbfffffec  word-align    0           uint8_t
++        0xbfffffe8  argv[4]       0           char *
++        0xbfffffe4  argv[3]       0xbffffffc  char *
++        0xbfffffe0  argv[2]       0xbffffff8  char *
++        0xbfffffdc  argv[1]       0xbffffff5  char *
++        0xbfffffd8  argv[0]       0xbfffffed  char *
++        0xbfffffd4  argv          0xbfffffd8  char **
++        0xbfffffd0  argc          4            int
++        0xbfffffcc  return address  0          void (*) ()*/
+ static bool
+-setup_stack (void **esp) 
++setup_stack (void **esp, char* file_name)
+ {
+   uint8_t *kpage;
++  uint8_t* uva = ((uint8_t *) PHYS_BASE) - PGSIZE;
+   bool success = false;
++  struct thread *t = thread_current();
++  struct supplement_page_table_elem* spe = page_add_supplemental_elem(&t->spt, t,
++                                            uva, false);
++  spe->writable = true;
++  spe->pin = true;
++  kpage = frame_request(spe);
++  if(kpage != NULL)
++  {
++    success = install_page (uva, kpage, true);
++
++  }
++  if(kpage==NULL)
++  {
++    //printf("cool\n");
++    kpage = frame_swap_for_new(spe); // installed in frame_swap...
++    //success = install_page (uva, kpage, true);
+ 
+-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+-  if (kpage != NULL) 
++    success=true;
++  }
++
++  if (kpage != NULL)
+     {
+-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
++      uint8_t* uva = ((uint8_t *) PHYS_BASE) - PGSIZE;
++      //success = install_page (uva, kpage, true);
+       if (success)
++      {
+         *esp = PHYS_BASE;
++        unioned_esp_pointer_t unioned_esp;
++        unioned_esp.p_byte = (char*) *esp;
++        char* argv[MAX_ARGS_COUNT];
++        int argc = parse_command_string(file_name, argv, false);
++        int argc_cpy = argc -1; // make a copy argc so we can use as index
++        // for storing ptrs of where we stored each string in esp
++        uint32_t* esp_arg_ptrs[MAX_ARGS_COUNT]; //Should this be a pointer to integers or an array of ptrs to integers
++        // for keeping track of the total bytes used,
++        // so we can add necessary padding if need be
++        int total_args_length_count = 0;
++
++
++
++        /*Push the arguments onto the stack*/
++        while(argc_cpy >= 0)
++        {
++          int arg_length = strlen(argv[argc_cpy]) + 1;
++          total_args_length_count+= arg_length;
++          // decrement esp byte pointer enough to store the argument
++          unioned_esp.p_byte -= sizeof(char)*arg_length;
++          // copy the arg string into the esp pointer location
++          memcpy(unioned_esp.p_byte, argv[argc_cpy], arg_length);
++
++          esp_arg_ptrs[argc_cpy] = unioned_esp.p_byte; //This should then be a pointer that is assigned
++          argc_cpy--;
++        }
++
++
++        int char_per_word = sizeof(uint32_t) / sizeof(char); // should be four, but why not?
++
++        /* Add some padding if necessary */
++        int remainder = total_args_length_count % char_per_word;
++        if(remainder != 0)
++        {
++          unioned_esp.p_byte -= (char_per_word - remainder);
++        }
++        unioned_esp.p_word--; // set esp pointer to next empty uint32_t element
++        /* add null to signify end of argv pointers */
++        *unioned_esp.p_word = NULL;
++        unioned_esp.p_word--;
++        argc_cpy = argc-1;
++
++
++        /* Push the addresses of the args */
++        while(argc_cpy >= 0)
++        {
++          *unioned_esp.p_word = esp_arg_ptrs[argc_cpy];
++          unioned_esp.p_word--;
++          argc_cpy--;
++        }
++        // add a pointer to where argv starts
++        char* temp = unioned_esp.p_word + 1;
++        *unioned_esp.p_word = temp;
++        unioned_esp.p_word --;
++        // add argc data
++        *unioned_esp.p_word = argc;
++        unioned_esp.p_word--;
++        // add fake return address
++        *unioned_esp.p_word = NULL;
++
++/*
++        printf("%d %d\n", unioned_esp.p_word, *esp);
++        printf("%s %s %s\n", esp_arg_ptrs[0], esp_arg_ptrs[1], esp_arg_ptrs[2]);
++        printf("%s %s %s \n", *((char**)(*(unioned_esp.p_word + 2))+1), *(unioned_esp.p_word + 4), *(unioned_esp.p_word + 5));
++        */
++
++        //printf("setup stack %p", *esp);
++        *esp = unioned_esp.p_word;
++        //printf("setup stack %p", *esp);
++
++        t->esp = esp;
++
++      } // end if(success)
+       else
+-        palloc_free_page (kpage);
++      {
++        frame_free (kpage);
++        page_supplemental_entry_remove(spe->vaddr);
++      }
++    } // end if(kpage != NULL)
++    else {
++      page_supplemental_entry_remove(spe->vaddr);
+     }
++
++    spe->pin = false;
+   return success;
+ }
+ 
+@@ -453,7 +869,7 @@ setup_stack (void **esp)
+    with palloc_get_page().
+    Returns true on success, false if UPAGE is already mapped or
+    if memory allocation fails. */
+-static bool
++bool
+ install_page (void *upage, void *kpage, bool writable)
+ {
+   struct thread *t = thread_current ();
+diff --git a/userprog/process.h b/userprog/process.h
+index 688cd2a..0cefa1e 100644
+--- a/userprog/process.h
++++ b/userprog/process.h
+@@ -1,11 +1,57 @@
+ #ifndef USERPROG_PROCESS_H
+ #define USERPROG_PROCESS_H
+-
+ #include "threads/thread.h"
++#define MAX_ARGS_COUNT 100
++#define MAX_FILE_NAME_SIZE 20
++struct lock find_child;
++
+ 
+ tid_t process_execute (const char *file_name);
+ int process_wait (tid_t);
+-void process_exit (void);
++void process_exit (int exit_status);
+ void process_activate (void);
+ 
++// Now used in exception.c only
++bool
++install_page (void *upage, void *kpage, bool writable);
++
++// We need to access a void* pointer in two different ways
++// A union will help faciliate that
++typedef union {
++	uint32_t* p_word;
++	char* p_byte;
++} unioned_esp_pointer_t;
++
++// This is for our linked list of fds
++struct fd_list_element {
++	struct list_elem elem_fd;
++	int fd;
++	struct file* fp;
++};
++
++// enums to be used for the child status
++enum child_status_t {
++  PROCESS_RUNNING,
++  PROCESS_STOPPED,
++  PROCESS_DONE
++};
++
++// Struct to be used for the child list
++struct child_list_elem {
++	struct semaphore * load_status; // for allowing the parent to wait for the child to finish loading!
++	bool mom_im_out_of_money; // for telling the parent the child cannot load due to memory gone!
++  	struct list_elem elem_child; // use the linked list data type proved by pintos in list.h/list.c
++	tid_t pid;
++	tid_t parent_pid;
++	enum child_status_t status; //The status of the child as an enum, no need for a zombie state
++	struct semaphore* sema;
++	int exit_status ;
++	struct child_list_elem** inception; // A pointer to the pointer of the child_data in the child's thread struct
++										// Let's us access child_data pointer without actually having to
++										// find the child thread, saves some time.
++};
++
++
++
++
+ #endif /* userprog/process.h */
+diff --git a/userprog/syscall.c b/userprog/syscall.c
+index 370c89b..6d273e7 100644
+--- a/userprog/syscall.c
++++ b/userprog/syscall.c
+@@ -3,18 +3,653 @@
+ #include <syscall-nr.h>
+ #include "threads/interrupt.h"
+ #include "threads/thread.h"
++#include "threads/vaddr.h"
++#include "devices/shutdown.h"
++#include "userprog/process.h"
++#include "filesys/filesys.h"
++#include "threads/synch.h"
++#include "vm/page.h"
+ 
+-static void syscall_handler (struct intr_frame *);
+ 
++struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pid);
++unpin_ptr_to_buffer(uint8_t* ptr, bool string, size_t size);
++
++static int
++get_user (const uint8_t *uaddr);
++static void syscall_handler (struct intr_frame *);
++struct list_elem* find_fd_element(int fd, struct thread* current_thread);
++bool create (const char *file, unsigned initial_size);
++int open (const char *file);
++unsigned tell (int fd);
++bool seek(int fd, unsigned offset);
++bool close (int fd);
++void exit (int status, struct intr_frame *f);
++int write (int fd, const void *buffer, unsigned size);
++static struct lock fd_lock;
+ void
+-syscall_init (void) 
++syscall_init (void)
+ {
++  lock_init(&read_write_lock);
++  lock_init(&fd_lock);
+   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
++  lock_init(&open_close_lock);
++  lock_init(&find_child);
+ }
+ 
+ static void
+-syscall_handler (struct intr_frame *f UNUSED) 
++syscall_handler (struct intr_frame *f) //UNUSED)
++{
++
++  struct thread *t = thread_current();
++  t->esp = f->esp;
++	// check for valid esp pointer (esp < PHYS_BASE)
++	if( !is_user_vaddr( f->esp))
++		exit(-1, f);
++
++	// Check if stack size is over the limit of 8 mb
++	// specifically to pass the test wait-kill
++	// see also : http://courses.cs.vt.edu/cs3204/spring2006/gback/pintos/doc/pintos_5.html#SEC101
++	//printf("%u", (uint32_t) PHYS_BASE - (uint32_t) f->esp);
++	//if(( (uint32_t) PHYS_BASE - (uint32_t) f->esp) > ( (uint32_t ) 3086692358))
++	//	exit(-1, f);
++	//Check for valid esp read access
++	if(get_user((char*) f->esp) == -1)
++  {
++		exit(-1, f);
++  }
++
++	//Assume that the esp pointer goes to the top of the stack (looks at return address)
++	uint32_t system_call_number = * (uint32_t**)(f->esp+0); //Create a pointer to the top of the stack (looks at argv[0])
++	uint32_t* stack_ptr =  (uint32_t*)(f->esp+0); // Two pointers with same address, but using different names
++
++	// Check for valid arg pointers
++  	if (!( is_user_vaddr (stack_ptr + 1) && is_user_vaddr (stack_ptr + 2) && is_user_vaddr (stack_ptr + 3)))
++    {
++    	exit (-1,f);
++    }
++	// to avoid confusion in usage
++	char* name = NULL;
++	uint32_t file_size = 0;
++	int fd = -1;
++/*
++	if (pid_t == 0) { //The process id is 0 if the process is a child
++		struct child_list *list = struct child_list; //Point to the existing list of children
++		while (list->next != NULL) { //Iterate through the list
++			list = list->next;
++		}
++		struct child_list *newChild = malloc(struct child_list);
++		list->next = newChild; //Link the list
++		newChild->pid = find_thread(pid_t)->tid; //Get the thread id of the current process
++		newChild->status = RUNNING; //Since you know that the process is running
++		newChild->next = NULL;
++	}*/
++
++	switch(system_call_number) { //This gives us the command that needs to be executed
++		case SYS_CREATE: //A pre-defined constant that refers to a "create" call
++		{
++			name = *(stack_ptr+1); //With this, we can load the name of the file
++			if (name == NULL) {
++				exit(-1, f); //If the pointer or file name is empty, then return an error code
++			}
++			file_size = *(stack_ptr+2); //Now get the second arg: the size of the file
++			f->eax = create(name, file_size); //Create the file and then save the status to the eax register
++      unpin_ptr_to_buffer(name, true, -1);
++			break;
++		}
++			//(Does this mean that eax is just some storage register. What is it really??)
++		case SYS_OPEN: //A pre-defined constant that refers to an "open" call
++		{
++			name = *(stack_ptr+1); //This looks just to the first and only needed parameter, the file to open
++			if (name == NULL) { //Check for a non-existant file of course
++				exit(-1, f);
++			}
++			else {
++				if(get_user(name) == -1) // check if pointer to name is actually valid
++					exit(-1, f);
++			}
++
++
++			fd = open(name); //Going to refer from eax from now on as the "status" register
++			//if(fd == -1)
++			//	exit(-1, f);
++			f->eax = fd;
++      unpin_ptr_to_buffer(name, true, -1);
++
++			break;
++		}
++		case SYS_SEEK:
++		{
++			fd = *(stack_ptr + 1);
++			if(fd <= 0)
++			{
++				exit(-1, f);
++			}
++			file_size = *(stack_ptr + 2);
++			f->eax = seek(fd, file_size);
++			break;
++		}
++		case SYS_TELL:
++		{
++			fd = *(stack_ptr + 1);
++			if(fd <= 0)
++			{
++				exit(-1, f);
++			}
++			f->eax = tell(fd);
++			break;
++		}
++		case SYS_CLOSE:
++		{
++			fd = *(stack_ptr+1); //Just do something almost exactly the same as what was done for SYS_CREATE
++			if (fd <= 0) {
++				exit(-1, f); //If the pointer or file name is empty, then return an error code
++			}
++			file_size = *(stack_ptr+2);
++			fd = close(fd); //The only line different from SYS_OPEN
++			if(fd == false)
++				exit(-1, f);
++			f->eax = fd;
++			break;
++		}
++		case SYS_READ:
++		{
++
++			fd = *(stack_ptr+1);
++			void* buffer = *(stack_ptr+2);
++			// checks for buffer < PHYS_BASE
++			if( !is_user_vaddr(buffer))
++				exit(-1, f);
++			//Check for valid buffer read access
++			if(get_user(buffer) == -1)
++				exit(-1, f);
++
++
++			file_size = *(stack_ptr+3);
++			int size_read = read(fd, buffer, file_size);
++			if(size_read == -1)
++				exit(-1, f);
++			else{
++				f->eax = size_read;
++			}
++      unpin_ptr_to_buffer(buffer, false, file_size);
++
++			break;
++		}
++		case SYS_WRITE:
++		{
++			fd = *(stack_ptr+1);
++			void* buffer = *(stack_ptr+2);
++			// checks for buffer < PHYS_BASE
++			if( !is_user_vaddr( buffer) )
++				exit(-1, f);
++			//Check for valid buffer read access
++			if(get_user(buffer) == -1)
++					exit(-1, f);
++			file_size = *(stack_ptr+3);
++
++			int size_write = write(fd, buffer, file_size);
++			if(size_write == -1)
++				exit(-1, f);
++			else
++				f->eax = size_write;
++
++      unpin_ptr_to_buffer(buffer, false, file_size);
++
++			break;
++		}
++
++
++		case SYS_FILESIZE:
++		{
++			fd = *(stack_ptr + 1);
++			f->eax = filesize_get(fd);
++			break;
++		}
++
++		case SYS_REMOVE:
++		{
++			name = *(stack_ptr + 1);
++			if (name == NULL) { //Check for a non-existant file of course
++				exit(-1, f);
++			}
++			else {
++				if(get_user(name) == -1) // check if pointer to name is actually valid
++					exit(-1, f);
++			}
++
++			f->eax = filesys_remove(name);
++
++			break;
++		}
++
++		case SYS_EXIT:
++	      {
++			fd = *(stack_ptr+1);
++			f->eax = fd;
++			exit(fd, f);
++			break;
++	      }
++
++	    case SYS_EXEC:
++	    {
++	    	name = *(stack_ptr+1);
++	    	f->eax = exec(name);
++        unpin_ptr_to_buffer(name, true, -1);
++	    	break;
++	    }
++
++	    case SYS_WAIT:
++	    {
++	    	fd = *(stack_ptr + 1);
++	    	f->eax = wait(fd);
++	    	break;
++	    }
++
++	    case SYS_HALT:
++	    {
++	    	halt();
++	    	break;
++	    }
++
++		default:
++		{
++      // Keep in mind there are two syscalls  we have not implmemetned
++      // we don't need a printf statment to tell us that though
++			//#ifdef PROJECT2_DEBUG
++		//printf("DID NOT IMPLEMENT THIS SYSCALL ERROR, number:%d\n", system_call_number);
++			//#endif
++			break;
++		}
++		}
++
++unpin_pointer(f->esp);
++}
++
++
++tid_t exec(const char* name)
++{
++	tid_t pid = process_execute(name);
++
++	if(pid != TID_ERROR)
++		return pid;
++	else
++		return -1;
++}
++
++/* Used by syscall_filesize*/
++int filesize_get(int fd)
++{
++	struct thread* current_thread = thread_current();
++	struct list_elem* e = find_fd_element(fd, current_thread);
++	if(e == NULL) return -1; // return false if fd not found TODO?
++	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
++	return file_length (fd_element -> fp) ;
++}
++
++/* Terminates Pintos by calling shutdown_power_off() (declared in "threads/init.h"). This should be seldom used, because you lose some information about possible deadlock situations, etc. */
++
++void halt (void) {
++	shutdown_power_off(); //Fairly straightforward
++}
++
++/* Terminates the current user program, returning status to the kernel. If the process's parent waits for it (see below), this is the status that will be returned. Conventionally, a status of 0 indicates success and nonzero values indicate errors. */
++
++void exit (int status, struct intr_frame *f) {
++
++
++	if(f!=NULL)
++		f->eax = status; //Save the status that was returned by the existing process to the stack
++
++	struct list_elem * e = NULL;
++	/*close all open files, but do not free the actual element in the list, we do that in process_exit()*/
++	/*for (e = list_begin (&t->fd_table); e != list_end (&t->fd_table);
++           e = list_next (e))
++        {
++          	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
++
++
++          	file_close(fd_element->fp); // this call frees fp
++          	fd_element->fp = NULL;
++
++        }*/
++
++	thread_exit_process(status); //A function in thread.h that terminates and removes from the list of threads the current thread t. t's status also becomes THREAD_DYING
++}
++
++
++
++ /* Waits for a child process pid and retrieves the child's exit status.
++
++    If pid is still alive, waits until it terminates. Then, returns the status that pid passed to exit. If pid did not call exit(), but was terminated by the kernel (e.g. killed due to an exception), wait(pid) must return -1. It is perfectly legal for a parent process to wait for child processes that have already terminated by the time the parent calls wait, but the kernel must still allow the parent to retrieve its child's exit status, or learn that the child was terminated by the kernel. wait must fail and return -1 immediately if any of the following conditions is true:
++        - pid does not refer to a direct child of the calling process. pid is a direct child of the calling process if and only if the calling process received pid as a return value from a successful call to exec.
++        - Note that children are not inherited: if A spawns child B and B spawns child process C, then A cannot wait for C, even if B is dead. A call to wait(C) by process A must fail. Similarly, orphaned processes are not assigned to a new parent if their parent process exits before they do.
++		- The process that calls wait has already called wait on pid. That is, a process may wait for any given child at most once.
++		- Processes may spawn any number of children, wait for them in any order, and may even exit without having waited for some or all of their children. Your design should consider all the ways in which waits can occur. All of a process's resources, including its struct thread, must be freed whether its parent ever waits for it or not, and regardless of whether the child exits before or after its parent.
++
++    You must ensure that Pintos does not terminate until the initial process exits. The supplied Pintos code tries to do this by calling process_wait() (in "userprog/process.c") from main() (in "threads/init.c"). We suggest that you implement process_wait() according to the comment at the top of the function and then implement the wait system call in terms of process_wait().
++
++    Implementing this system call requires considerably more work than any of the rest. */
++
++int wait (tid_t pid) {
++	return process_wait(pid);
++}
++
++/* Creates a new file called file initially initial_size bytes in size. Returns true if successful, false otherwise. Creating a new file does not open it: opening the new file is a separate operation which would require a open system call. */
++
++bool create (const char *file, unsigned initial_size) {
++	bool return_bool = filesys_create(file, initial_size); //Already in filesys.c...
++
++	return return_bool;
++}
++
++/* Deletes the file called file. Returns true if successful, false otherwise. A file may be removed regardless of whether it is open or closed, and removing an open file does not close it. See Removing an Open File, for details. */
++//TODO
++//
++
++bool remove (const char *file)
++{
++	return filesys_remove(file);
++}
++
++/* Opens the file called file. Returns a nonnegative integer handle called a "file descriptor" (fd), or -1 if the file could not be opened.
++
++    File descriptors numbered 0 and 1 are reserved for the console: fd 0 (STDIN_FILENO) is standard input, fd 1 (STDOUT_FILENO) is standard output. The open system call will never return either of these file descriptors, which are valid as system call arguments only as explicitly described below.
++
++    Each process has an independent set of file descriptors. File descriptors are not inherited by child processes.
++
++    When a single file is opened more than once, whether by a single process or different processes, each open returns a new file descriptor. Different file descriptors for a single file are closed independently in separate calls to close and they do not share a file position. */
++
++int open (const char *file) {
++
++	struct thread* current_thread = thread_current();
++	lock_acquire(&read_write_lock);
++	struct file* fp = filesys_open(file); //Again, already in filesys.c
++  lock_release(&read_write_lock);
++	int return_fd = -1;
++	/* Now update the file descriptor table */
++	if (fp != NULL) {
++
++		return_fd = add_file_to_fd_table(current_thread, fp);
++	}
++	return return_fd; // IF The file could not be assigned a new file descriptor, then return_fd == -1
++}
++
++/* Returns the size, in bytes, of the file open as fd. */
++
++//int filesize (int fd)
++
++/* Reads size bytes from the file open as fd into buffer. Returns the number of bytes actually read (0 at end of file), or -1 if the file could not be read (due to a condition other than end of file). Fd 0 reads from the keyboard using input_getc(). */
++
++int read (int fd, void *buffer, unsigned size)
++{
++
++
++	int return_size = -1;
++	if(fd == 0)
++	{
++		int i = 0;
++		for(i = 0; i < size; i++)
++		{
++      //if(!lock_held_by_current_thread(&read_write_lock))
++      lock_acquire(&read_write_lock);
++
++			((char*) buffer) [i] = input_getc();
++      //if(lock_held_by_current_thread(&read_write_lock))
++      lock_release(&read_write_lock);
++
++		}
++		return_size = size;
++
++	}
++
++	else if (fd != 1)
++	{
++		struct thread* t = thread_current();
++		struct list_elem* e = find_fd_element(fd, t);
++		if(e == NULL) // if no file found with given fd, return error
++			{
++				goto read_done;
++			}
++		struct fd_list_element *fd_element = list_entry(e, struct fd_list_element, elem_fd);
++
++    //if(lock_held_by_current_thread(&read_write_lock))
++    //{
++    //  printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
++      lock_acquire(&read_write_lock);
++    //}
++		return_size = file_read (fd_element->fp, buffer, size) ;
++    //if(lock_held_by_current_thread(&read_write_lock))
++			lock_release(&read_write_lock);
++
++	}
++
++	read_done:
++
++
++
++	return return_size;
++}
++
++/* Writes size bytes from buffer to the open file fd. Returns the number of bytes actually written, which may be less than size if some bytes could not be written.
++
++    Writing past end-of-file would normally extend the file, but file growth is not implemented by the basic file system. The expected behavior is to write as many bytes as possible up to end-of-file and return the actual number written, or 0 if no bytes could be written at all.
++
++    Fd 1 writes to the console. Your code to write to the console should write all of buffer in one call to putbuf(), at least as long as size is not bigger than a few hundred bytes. (It is reasonable to break up larger buffers.) Otherwise, lines of text output by different processes may end up interleaved on the console, confusing both human readers and our grading scripts. */
++
++int write (int fd, const void *buffer, unsigned size) { //Already done in file.c, but will implement anyway (super confused now)
++
++
++	struct thread* current_thread = thread_current();
++	struct file* fp = NULL;
++	int return_size = -1;
++
++	if (fd == 1) //
++	{
++    lock_acquire(&read_write_lock);
++
++		putbuf(buffer, size);
++    lock_release(&read_write_lock);
++
++		return_size = size;
++	}
++
++	else if (fd != 0 && fd !=1) {
++		struct list_elem* e = find_fd_element(fd, current_thread);
++		if(e == NULL)
++			goto write_done; // return error if file not found
++		struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
++
++   //if(lock_held_by_current_thread(&read_write_lock))
++    //{
++      //printf("This is a hack, if this is printing out, then the hack failed: contact ziping\n");
++    //  printf("", buffer);
++      lock_acquire(&read_write_lock);
++    //}
++		return_size = file_write (fd_element->fp, buffer, size) ;
++    //if(lock_held_by_current_thread(&read_write_lock))
++			lock_release(&read_write_lock);
++
++	}
++write_done:
++
++	return return_size;
++}
++
++    /* Changes the next byte to be read or written in open file fd to position, expressed in bytes from the beginning of the file. (Thus, a position of 0 is the file's start.)
++
++    A seek past the current end of a file is not an error. A later read obtains 0 bytes, indicating end of file. A later write extends the file, filling any unwritten gap with zeros. (However, in Pintos files have a fixed length until project 4 is complete, so writes past end of file will return an error.) These semantics are implemented in the file system and do not require any special effort in system call implementation. */
++
++bool seek (int fd, unsigned position)
++{
++	struct thread* current_thread = thread_current();
++	struct list_elem* e = find_fd_element(fd, current_thread);
++	if(e == NULL) return false; //is this needed?
++	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
++lock_acquire(&read_write_lock);
++  file_seek(fd_element->fp, position);
++  lock_release(&read_write_lock);
++	return true;
++
++}
++
++/* Returns the position of the next byte to be read or written in open file fd, expressed in bytes from the beginning of the file. */
++
++unsigned tell (int fd) {
++	struct thread* current_thread = thread_current();
++	struct list_elem* e = find_fd_element(fd, current_thread);
++	//if(e == NULL) return false; is this needed?
++	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
++	return file_seek(fd_element->fp);
++
++}
++
++/* Closes file descriptor fd. Exiting or terminating a process implicitly closes all its open file descriptors, as if by calling this function for each one. */
++
++bool close (int fd) {
++	struct thread* current_thread = thread_current();
++	struct list_elem* e = find_fd_element(fd, current_thread);
++	if(e == NULL) return false; // return false if fd not found
++	struct list_elem*  return_e = list_remove (e);
++
++	struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
++	lock_acquire(&read_write_lock);
++	file_close(fd_element->fp);
++	lock_release(&read_write_lock);
++	free(fd_element); // Free the element we just removed, please also see open()
++	return true;
++}
++
++
++
++// Find the element in the linkedlist coressponding to the given fd
++// Uses: Returns the list_element* type
++// 			You can thus then use this returned type to remove element or
++//          Edit the contents of the actual element
++// You can view an example of these two uses in void close function above
++struct list_elem* find_fd_element(int fd, struct thread* current_thread)
++{
++	    struct list_elem *e;
++      	// search through the fd_table for the matching fd
++		for (e = list_begin (&current_thread->fd_table); e != list_end (&current_thread->fd_table);
++           e = list_next (e))
++        {
++          struct  fd_list_element *fd_element = list_entry (e, struct fd_list_element, elem_fd);
++          if(fd_element->fd == fd)
++          {
++          	return e;
++          }
++        }
++
++        return NULL;
++}
++
++// Find the element in the linkedlist coressponding to the given tid_t pid
++// Uses: Returns the list_element* type
++// 			You can thus then use this returned type to remove element or
++//          Edit the contents of the actual element
++struct list_elem* find_child_element(struct thread* current_thread, tid_t pid)
++{
++	    struct list_elem *e;
++      	// search through the fd_table for the matching fd
++		for (e = list_begin (&current_thread->child_list); e != list_end (&current_thread->child_list);
++           e = list_next (e))
++        {
++          struct  child_list_elem *child_element = list_entry (e, struct child_list_elem, elem_child);
++          if(child_element->pid == pid)
++          {
++          	return e;
++          }
++        }
++
++        return NULL;
++}
++
++
++
++// TODO: Should check if file is already opened/added
++int add_file_to_fd_table(struct thread* current_thread, struct file* fp)
++{
++		int return_fd = -1;
++		struct fd_list_element* fd_element = malloc(sizeof(struct fd_list_element));
++		fd_element->fd = current_thread->fd_table_counter;
++		fd_element->fp = fp;
++		return_fd = fd_element->fd;
++
++		list_push_back(&current_thread->fd_table, &fd_element->elem_fd);
++		lock_acquire(&fd_lock);
++		current_thread->fd_table_counter++; // increment counter, so we have a new fd to use for the next file
++		lock_release(&fd_lock);
++		return return_fd;
++}
++// TODO: Should check if child is already added
++struct child_list_elem* add_child_to_list(struct thread* parent_thread, tid_t pid)
++{
++		/* create new child element to push to the parent's child list*/
++		struct child_list_elem* child_element = malloc(sizeof(struct child_list_elem));
++		child_element->pid = pid;
++    child_element->load_status = NULL;
++		child_element->parent_pid = parent_thread->tid;
++		child_element->status = PROCESS_RUNNING;
++		child_element->mom_im_out_of_money = false;
++		child_element->sema = malloc(sizeof(struct semaphore)); // set only in process_wait by the parent, used for waiting
++		sema_init(child_element->sema, 0);
++		// TODO: This may cause concurrency issues by doing it this way, but we will see....
++		struct thread* child_thread = find_thread(pid);
++		child_thread->child_data = child_element;
++		/* also give the child thread struct itself a ptr to the child_element
++		   so that the child can update its status/ and exit status and the parent will see */
++		child_element->inception = &child_thread->child_data;
++		list_push_back(&parent_thread->child_list, &child_element->elem_child);
++    //Hack:
++    //printf("yo%p", child_element->sema);
++    child_thread->hack_wait = child_element->sema;
++		return child_element;
++}
++
++
++
++/* Reads a byte at user virtual address UADDR.
++   UADDR must be below PHYS_BASE.
++   Returns the byte value if successful, -1 if a segfault
++   occurred. */
++static int
++get_user (const uint8_t *uaddr)
++{
++  int result;
++  asm ("movl $1f, %0; movzbl %1, %0; 1:"
++       : "=&a" (result) : "m" (*uaddr));
++  return result;
++}
++
++/* Writes BYTE to user address UDST.
++   UDST must be below PHYS_BASE.
++   Returns true if successful, false if a segfault occurred. */
++static bool
++put_user (uint8_t *udst, uint8_t byte)
++{
++  int error_code;
++  asm ("movl $1f, %0; movb %b2, %1; 1:"
++       : "=&a" (error_code), "=m" (*udst) : "q" (byte));
++  return error_code != -1;
++}
++
++
++unpin_ptr_to_buffer(uint8_t* ptr, bool string, size_t size)
+ {
+-  printf ("system call!\n");
+-  thread_exit ();
++  uint8_t* pointer = ptr;
++  if(string)
++  {
++    while(*pointer != NULL)
++      {
++        unpin_pointer(pointer);
++        pointer++;
++      }
++  }
++  else{
++    for(int i = 0; i < size; i++)
++    {
++      unpin_pointer(pointer);
++      pointer++;
++    }
++  }
+ }
+diff --git a/userprog/syscall.h b/userprog/syscall.h
+index 9059096..58e2835 100644
+--- a/userprog/syscall.h
++++ b/userprog/syscall.h
+@@ -1,6 +1,8 @@
++
+ #ifndef USERPROG_SYSCALL_H
+ #define USERPROG_SYSCALL_H
+ 
+ void syscall_init (void);
+-
++struct lock read_write_lock;
++struct lock open_close_lock;
+ #endif /* userprog/syscall.h */
+diff --git a/vm/frame.c b/vm/frame.c
+new file mode 100644
+index 0000000..68a5a3d
+--- /dev/null
++++ b/vm/frame.c
+@@ -0,0 +1,236 @@
++#include "threads/palloc.h"
++#include "threads/interrupt.h"
++#include "threads/thread.h"
++#include "threads/vaddr.h"
++#include "threads/synch.h"
++#include "userprog/process.h"
++#include "userprog/pagedir.h"
++#include "vm/swap.h"
++#include "vm/page.h"
++#include "vm/frame.h"
++
++struct hash frame_table;
++struct lock frame_table_lock;
++
++// Function that creates a hash value for a given frame table entry
++unsigned frame_hash_func (const struct hash_elem *e, void *aux UNUSED)
++{
++  struct frame_table_element * fte = hash_entry(e,struct frame_table_element,
++                                                  elem_frame);
++  ASSERT(fte->kpe != NULL);
++  return (unsigned) fte->kpe;
++}
++
++/* Compares the value of two hash elements A and B, given
++   auxiliary data AUX.  Returns true if A is less than B, or
++   false if A is greater than or equal to B. */
++// TODO: May be helpful when doing TLB
++bool frame_less_func (const struct hash_elem *a,
++                                const struct hash_elem *b,
++                                void *aux UNUSED)
++  {
++    struct frame_table_element * fteA = hash_entry(a,struct frame_table_element,
++                                                    elem_frame);
++    struct frame_table_element * fteB = hash_entry(b,struct frame_table_element,
++                                                    elem_frame);
++    if(fteA->kpe < fteB->kpe)
++      return true;
++    else
++      return false;
++  }
++
++  // Insert a new element into the frame table
++  void* frame_table_insert(struct supplement_page_table_elem* spe, uint8_t* kp)
++  {
++    // TODO: Check if already inserted
++    struct frame_table_element* fte = malloc(sizeof(struct frame_table_element));
++    ASSERT(fte != NULL);
++    fte->spe = spe;
++    fte->kpe = kp;
++    if(spe!=NULL)
++    {
++      if(spe -> executable_page == true)
++        fte->spe->in_filesys = false;
++      fte->spe->access = true;
++    }
++    lock_acquire(&frame_table_lock);
++    hash_insert(&frame_table,&fte->elem_frame);
++    lock_release(&frame_table_lock);
++    return fte;
++
++  }
++
++// Intiialize any variables or data structures used for frame tables
++// Called in init.c like the others
++void frame_intitialization()
++{
++  hash_init(&frame_table, frame_hash_func, frame_less_func, NULL);
++  lock_init(&frame_table_lock);
++
++  uint8_t* kp = palloc_get_page(PAL_USER | PAL_ZERO);
++  ASSERT(kp != NULL);
++  do{
++    frame_table_insert(NULL, kp);
++    kp = palloc_get_page(PAL_USER | PAL_ZERO);
++  } while(kp != NULL);
++
++}
++
++
++// return an unused frame's address that is requested by a virtual page
++uint8_t* frame_request(struct supplement_page_table_elem* spe){
++  /* This implementation is commented out as a backup
++  lock_acquire(&frame_table_lock);
++  void* frame = palloc_get_page(PAL_USER);
++  if(frame != NULL)
++  {
++    frame_table_insert(spe, frame);
++    lock_release(&frame_table_lock);
++    return frame;
++  }
++  else {
++    lock_release(&frame_table_lock);
++    return NULL;
++  } */
++    lock_acquire(&frame_table_lock);
++    // search through the fd_table for unused frame table entry
++    struct hash_iterator i;
++    hash_first(&i, &frame_table);
++    while(hash_next(&i))
++    {
++      struct frame_table_element * fte = hash_entry(hash_cur (&i),
++                                struct  frame_table_element, elem_frame);
++      ASSERT(fte->kpe != NULL);
++      if(fte->spe == NULL)
++      {
++        fte->spe = spe;
++        fte->spe->kpe = fte->kpe;
++        lock_release(&frame_table_lock);
++        return fte->kpe;
++      }
++    }
++    lock_release(&frame_table_lock);
++    return NULL;
++}
++
++
++// Returns the frame table element associated with
++// a given physical frame address
++struct frame_table_elem * frame_find(const void* kpe)
++{
++  if(kpe == NULL) return NULL;
++  lock_acquire(&frame_table_lock);
++
++  struct frame_table_element fte;
++  fte.kpe = kpe;
++  struct hash_elem * e = hash_find(&frame_table, &fte);
++  if(e == NULL) {lock_release(&frame_table_lock); return NULL;}
++  struct frame_table_element * fte_found = hash_entry(e,
++                            struct  frame_table_element, elem_frame);
++ lock_release(&frame_table_lock);
++  return fte_found;
++}
++
++// Frees up a frame that is being used
++bool frame_free(const void* kpe)
++{
++  struct frame_table_element* fte = frame_find(kpe);
++  if(fte == NULL) { return false;}
++  lock_acquire(&frame_table_lock);
++  fte->spe = NULL;
++  lock_release(&frame_table_lock);
++  return true;
++
++}
++
++bool frame_free_nolock(const void* kpe)
++{
++  struct frame_table_element* fte = frame_find(kpe);
++  if(fte == NULL) { return false;}
++  //lock_acquire(&frame_table_lock);
++  fte->spe = NULL;
++  //lock_release(&frame_table_lock);
++  return true;
++
++}
++
++//Finds a frame to swap
++struct frame_table_elem* frame_find_swappable_frame()
++{
++  //lock_acquire(&frame_table_lock);
++
++  // simulate a circular buffer
++  while(true)
++  {
++    struct hash_iterator i;
++    hash_first(&i, &frame_table);
++    while(hash_next(&i))
++    {
++      struct frame_table_element * fte = hash_entry(hash_cur (&i),
++                                struct  frame_table_element, elem_frame);
++      ASSERT(fte->kpe != NULL);
++      if(fte->spe->pin == false)
++      {
++        if(!pagedir_is_accessed(fte->spe->t->pagedir, fte->spe->vaddr))
++        {
++          //lock_release(&frame_table_lock);
++          return fte;
++        }
++        else{
++          pagedir_set_accessed(fte->spe->t->pagedir, fte->spe->vaddr, false);
++        }
++      } // end if(pin == false)
++    } // end while(has_next)
++  } // end while()
++
++//  lock_release(&frame_table_lock);
++}
++
++// Evict the page in the frame
++// And put in the new one, meaning, this was a newly made page
++// not one that had been swapped out
++// it's frame_request, but gives you a frame address
++// that had a page in it, but the page is evicted
++uint8_t* frame_swap_for_new(
++  struct supplement_page_table_elem* new_page)
++  {
++    lock_acquire(&frame_table_lock);
++    struct frame_table_element* fte_swap =  frame_find_swappable_frame();
++
++    uint8_t* kp   = swap_frame(fte_swap, new_page);
++  //  printf("%p", new_page->vaddr);
++    install_page(new_page->vaddr, kp, new_page->writable);
++    lock_release(&frame_table_lock);
++
++    return kp;
++  }
++
++
++// Evict the page in the frame
++// And put in the swapped out page
++// We assume the page that needs the frame
++// was a swapped out frame
++// Returns the frame address
++uint8_t* frame_swap_for_swapped(
++  struct supplement_page_table_elem* swapped_page)
++  {
++    lock_acquire(&frame_table_lock);
++
++    struct frame_table_element* fte_swap =  frame_find_swappable_frame();
++
++  ///printf("5.1.2 %d %p\n", fte_swap->spe->executable_page, fte_swap->spe);
++
++    uint8_t* kp   = swap_frame(fte_swap, swapped_page);
++    //printf("stackinstallation %p\n", swapped_page->vaddr);
++
++    pagedir_set_page(swapped_page->t->pagedir, swapped_page->vaddr, kp, swapped_page->writable);
++    //printf("5.1.2end\n");
++    lock_release(&frame_table_lock);
++
++    return kp;
++  }
++
++
++
++
++// TODO: Write Frame Table Destructor
+diff --git a/vm/frame.h b/vm/frame.h
+new file mode 100644
+index 0000000..34202a9
+--- /dev/null
++++ b/vm/frame.h
+@@ -0,0 +1,29 @@
++#ifndef VM_FRAME_H
++#define VM_FRAME_H
++
++#include "userprog/syscall.h"
++#include <stdio.h>
++#include <syscall-nr.h>
++#include "threads/interrupt.h"
++#include "threads/thread.h"
++#include "threads/vaddr.h"
++#include "devices/shutdown.h"
++#include "userprog/process.h"
++#include "filesys/filesys.h"
++#include "threads/synch.h"
++#include "vm/page.h"
++#include "kernel/hash.h"
++
++struct frame_table_element {
++  struct hash_elem elem_frame;
++  uint8_t* kpe; // Contains the addres in which the page
++  struct supplement_page_table_elem* spe; // See process.h
++};
++
++uint8_t* frame_request(struct supplement_page_table_elem* spe);
++struct frame_table_elem * frame_find(const void* kpe);
++bool frame_free(const void* kpe);
++
++bool frame_free_nolock(const void* kpe);
++
++#endif
+diff --git a/vm/page.c b/vm/page.c
+new file mode 100644
+index 0000000..9187b88
+--- /dev/null
++++ b/vm/page.c
+@@ -0,0 +1,75 @@
++
++
++#include "threads/interrupt.h"
++#include "threads/thread.h"
++#include "threads/vaddr.h"
++#include "devices/shutdown.h"
++#include "userprog/process.h"
++#include "userprog/pagedir.h"
++#include "vm/page.h"
++
++// creates a supplementable page table entry
++// inserts data into it from input, e.g. struct thread* t
++   // There most likely will bemore parameters for
++   // More data
++// adds the setup entry into the given list* spt
++struct supplement_page_table_elem* page_add_supplemental_elem
++      (struct list* spt, struct thread* t,
++      uint8_t* vaddr, bool executable_page)
++{
++  struct supplement_page_table_elem* spe = malloc(sizeof(
++                    struct supplement_page_table_elem
++  ));
++  spe->t = t;
++  spe->vaddr = vaddr;
++  spe->executable_page = executable_page; // probably needs to be changed to enum
++  spe->in_swap = false;
++  spe->pin = false;
++  spe->access = false;
++  spe->page_read_bytes = -1;
++  spe->exec_ofs = -1;
++  spe->in_filesys = executable_page == true ? true : false;
++  spe->exec_fp = NULL;
++  spe->sector = -1;
++  spe->writable = false;
++  spe->kpe = NULL;
++  list_push_back(spt, &spe->spt_elem);
++  return spe;
++}
++
++struct supplement_page_table_elem* page_find_spe(
++  void* virtual_address)
++{
++  struct thread *t = thread_current();
++
++  struct list_elem *e;
++    // search through the fd_table for the matching fd
++for (e = list_begin (&t->spt); e != list_end (&t->spt);
++       e = list_next (e))
++    {
++      struct  supplement_page_table_elem *element = list_entry (e, struct supplement_page_table_elem, spt_elem);
++      if(element->vaddr == virtual_address)
++      {
++        element->exec_fp = t->exec_fp;
++        return element;
++      }
++    }
++
++    return NULL;
++}
++
++bool page_supplemental_entry_remove(void* uva)
++{
++  struct supplement_page_table_elem* spe = page_find_spe(uva);
++  if(spe == NULL) return false;
++  list_remove(&spe->spt_elem);
++  free(spe);
++  return true;
++}
++
++void unpin_pointer(uint8_t* pointer)
++{
++  uint8_t* uva = (uint32_t)pointer & (uint32_t)0xFFFFF000;
++  struct supplement_page_table_elem* spe = page_find_spe(uva);
++  spe->pin = false;
++}
+diff --git a/vm/page.h b/vm/page.h
+new file mode 100644
+index 0000000..c1501f2
+--- /dev/null
++++ b/vm/page.h
+@@ -0,0 +1,38 @@
++#ifndef VM_PAGE_H
++#define VM_PAGE_H
++#include "devices/block.h"
++#include "filesys/off_t.h"
++// Struct to be used for supplmenetal page table (SPT) list
++struct supplement_page_table_elem {
++	struct list_elem spt_elem; // needed by linked list
++	uint8_t* vaddr; // holds the virtual address that the page is associated with
++	 // determines if the data in the page holds executable code
++	 // false means its stack
++	 // true means code page or heap
++	bool executable_page;
++	bool in_swap; // True if page was evicted into swap area
++	bool pin; // Indicates if the page shouldn't be evicted
++	bool access; // Indicates if the page has been accessed (put in a frame before)
++	int sector; // Indicates where in the swap area the page is located
++	bool in_filesys; // True if executable page was evicted
++	int page_read_bytes; // Contains number of bytes a page holds of exec file
++	int page_zero_bytes;
++	off_t exec_ofs;
++	bool writable;
++	struct file * exec_fp; // Holds the executable file, set in page.c->page_find_spe()
++	struct thread * t; // Holds the thread that owns the virtual page
++	uint8_t* kpe; // Holds the kernel vritual addr, or frame addr
++};
++
++struct supplement_page_table_elem* page_find_spe(
++  void* virtual_address);
++
++struct supplement_page_table_elem* page_add_supplemental_elem
++      (struct list* spt, struct thread* t,
++      uint8_t* vaddr, bool executable_page);
++
++bool page_supplemental_entry_remove(void* uva);
++void unpin_pointer(uint8_t* pointer);
++
++
++#endif
+diff --git a/vm/stack.c b/vm/stack.c
+new file mode 100644
+index 0000000..7b85d63
+--- /dev/null
++++ b/vm/stack.c
+@@ -0,0 +1,47 @@
++#include "userprog/exception.h"
++#include <inttypes.h>
++#include <stdio.h>
++#include "userprog/gdt.h"
++#include "threads/interrupt.h"
++#include "threads/thread.h"
++#include "threads/vaddr.h"
++#include "vm/page.h"
++#include "vm/frame.h"
++#include "userprog/process.h"
++
++void stack_growth(struct intr_frame * f, bool present, bool access, bool accessor, void* uva) {
++struct thread *t = thread_current();
++uint8_t* esp = accessor == true ? f->esp : t->esp;
++ if ((uint8_t*)uva >= (uint8_t*) esp - 32) { //Check that the access is not below esp - 32
++  //  if (present && access && address != esp - 32) { //If the page does not exist and the operation is a write
++	//  int32_t bytes_to_allocate = (int) uva - (int) esp; //Find the number of bytes to allocate for the new value to be written to the stack
++
++			struct thread* current = thread_current(); //Get the address of the current thread
++      uint8_t* uva_masked =  (uint32_t) uva & (uint32_t)0xFFFFF000;
++      struct supplement_page_table_elem* spe = page_add_supplemental_elem(&current->spt, current, uva_masked, false); //Allocate a new spot on the spt for the data to be written to the stack
++			spe->writable = true;
++      spe->vaddr = uva_masked;
++      spe->pin = true;
++
++			uint8_t* kp = frame_request(spe);
++
++      if(kp != NULL)
++        install_page (uva_masked, kp, true);
++
++      // WE now need to swap something out
++      else{
++			  kp = frame_swap_for_new(spe);
++      }
++      spe->in_swap = false;
++      spe->pin = false;
++    //}
++	//if (present && !accessor && access) {
++	  //If a fault occurres in the kernel
++	//}
++ }
++ else { // Or else exit if the access to a stack location was invalid, not missing
++//printf("%p\n", t->hack_wait);
++  printf("", t->hack_wait); // HACK
++   exit(-1);
++ }
++}
+diff --git a/vm/stack.h b/vm/stack.h
+new file mode 100644
+index 0000000..18fa3dc
+--- /dev/null
++++ b/vm/stack.h
+@@ -0,0 +1,16 @@
++#ifndef VM_STACK_H
++#define VM_STACK_H
++#include "userprog/exception.h"
++#include <inttypes.h>
++#include <stdio.h>
++#include "userprog/gdt.h"
++#include "threads/interrupt.h"
++#include "threads/thread.h"
++#include "threads/vaddr.h"
++#include "vm/page.h"
++#include "vm/frame.h"
++
++#define MAX_STACK_SIZE 0x800000
++
++void stack_growth(struct intr_frame *f, bool present, bool access, bool accessor, void* address);
++#endif
+diff --git a/vm/swap.c b/vm/swap.c
+new file mode 100644
+index 0000000..d455ffd
+--- /dev/null
++++ b/vm/swap.c
+@@ -0,0 +1,137 @@
++#include "threads/palloc.h"
++#include "threads/interrupt.h"
++#include "threads/thread.h"
++#include "threads/vaddr.h"
++#include "threads/synch.h"
++#include "userprog/process.h"
++#include "userprog/pagedir.h"
++#include "vm/swap.h"
++
++#include "vm/frame.h"
++#include "devices/block.h"
++
++struct bitmap * swap_table = NULL; // element represents a page in the swap block
++struct lock swap_lock;
++struct block *swap_block = NULL;
++//bool* swap_table;
++
++void swap_init()
++{
++  swap_block = block_get_role (BLOCK_SWAP);
++  ASSERT(swap_block != NULL);
++  swap_table = bitmap_create( block_size(swap_block) / SECTORS_PER_PAGE);
++  ASSERT(swap_table != NULL);
++  bitmap_set_all(swap_table, true); // make all swap areas free (true == free)
++/*  swap_table = malloc(sizeof(bool)*(block_size(swap_block) / SECTORS_PER_PAGE));
++  for(int i = 0; i < block_size(swap_table)/ SECTORS_PER_PAGE; i++)
++  {
++    swap_table[i] = true;
++  }*/
++  lock_init(&swap_lock);
++}
++/*
++int swap_find_block_and_set()
++{
++  for(int i = 0; i < block_size(swap_block)/ SECTORS_PER_PAGE; i++)
++  {
++    if(swap_table[i])
++      {
++        swap_table[i] = false;
++        return i;
++      }
++  }
++  return -1;
++}*/
++
++uint8_t* swap_frame(struct frame_table_element* fte,
++          struct supplement_page_table_elem* new_page
++          )
++{
++  //printf("hello\n");
++  lock_acquire(&swap_lock);
++//  printf("hello2\n");
++
++
++  struct block* swap = swap_block;//block_get_role (BLOCK_SWAP);
++//  printf("hello3\n");
++//printf("swapping out shit");
++
++  if(fte->spe->executable_page == false)
++  {
++    ASSERT(fte->spe->in_swap == false);
++  //  int free_swap_area = swap_find_block_and_set();
++   int free_swap_area = bitmap_scan_and_flip(swap_table, 0, 1, true);
++   ASSERT(free_swap_area != SIZE_MAX);
++    for (int i = 0; i < SECTORS_PER_PAGE; i++)
++    {
++      bool lock_status = false;
++    if(!lock_held_by_current_thread(&read_write_lock))
++     {
++        lock_status = true;
++      lock_acquire(&read_write_lock);
++ }
++ block_write(swap_block, free_swap_area*SECTORS_PER_PAGE + i,
++        (uint8_t*) fte->kpe + i*BLOCK_SECTOR_SIZE);
++       if(lock_status)
++        lock_release(&read_write_lock);
++    }
++
++    fte->spe->sector = free_swap_area;
++    ASSERT(fte->spe->in_swap == false);
++    fte->spe->in_swap = true;
++  }
++  else {
++    ASSERT(fte->spe->in_swap == false);
++    PANIC(fte->spe->in_filesys == false);
++    ASSERT(fte->spe->pin == false);
++
++    // Looks like this wasn't a missing page at all, but an invalid access
++    // that the user program did!
++  //  if(fte->spe->in_filesys != false)
++  //  {
++    //  exit(-1); }
++    fte->spe->in_filesys = true;
++  }
++
++  // Makesure the page direcotry knows that page is swapped
++  pagedir_clear_page (fte->spe->t->pagedir, fte->spe->vaddr);
++  // put in the new page into frame
++  fte->spe = new_page;
++  fte->spe->kpe = fte->kpe;
++
++  // write into the frame, what the swap had if necessary
++  // if its an exectuable page, we do it in the page fault handler
++  if(new_page->in_swap == true)
++  {
++  //  printf("swap reader\n");
++    ASSERT(bitmap_test(swap_table, new_page->sector) == false);
++    for (int i = 0; i < SECTORS_PER_PAGE; i++)
++    {
++      bool lock_status = false;
++    if(!lock_held_by_current_thread(&read_write_lock))
++     {
++        lock_status = true;
++      lock_acquire(&read_write_lock);
++ }
++      block_read(swap_block, new_page->sector*SECTORS_PER_PAGE + i,
++        (uint8_t*) fte->kpe + i*BLOCK_SECTOR_SIZE);
++        if(lock_status)
++        lock_release(&read_write_lock);
++    }
++
++
++    //swap_table[new_page->sector] = true;
++    bitmap_set (swap_table, new_page->sector, true);
++    new_page->sector = -1;
++  }
++
++  // Now return the frame address
++  // In case the frame writing is done in page fault handler
++  lock_release(&swap_lock);
++  return fte->kpe;
++}
++
++void swap_table_set(size_t sector, bool value)
++{
++  bitmap_set(swap_table, sector, value);
++}
+diff --git a/vm/swap.h b/vm/swap.h
+new file mode 100644
+index 0000000..fab8981
+--- /dev/null
++++ b/vm/swap.h
+@@ -0,0 +1,23 @@
++#ifndef VM_SWAP_H
++#define VM_SWAP_H
++#include "userprog/syscall.h"
++#include <stdio.h>
++#include <syscall-nr.h>
++#include "threads/interrupt.h"
++#include "threads/thread.h"
++#include "threads/vaddr.h"
++#include "devices/shutdown.h"
++#include "userprog/process.h"
++#include "filesys/filesys.h"
++#include "threads/synch.h"
++#include "vm/page.h"
++#include "vm/frame.h"
++#include "kernel/hash.h"
++void swap_init();
++void swap_table_set(size_t sector, bool value);
++
++uint8_t* swap_frame(struct frame_table_element* fte,
++          struct supplement_page_table_elem* new_page
++        );
++
++#endif
