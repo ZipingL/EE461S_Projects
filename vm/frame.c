@@ -174,6 +174,8 @@ struct frame_table_elem* frame_find_swappable_frame()
         if(!pagedir_is_accessed(fte->spe->t->pagedir, fte->spe->vaddr))
         {
           //lock_release(&frame_table_lock);
+          fte->spe->pin = true; // pin this frame so no one else evicts it
+                          // Since it is about to be evicted right now
           return fte;
         }
         else{
@@ -214,6 +216,7 @@ uint8_t* frame_swap_for_new(
 uint8_t* frame_swap_for_swapped(
   struct supplement_page_table_elem* swapped_page)
   {
+    swapped_page->pin = true; // make sure the pin the page we want to swap
     lock_acquire(&frame_table_lock);
 
     struct frame_table_element* fte_swap =  frame_find_swappable_frame();
@@ -226,6 +229,7 @@ uint8_t* frame_swap_for_swapped(
     pagedir_set_page(swapped_page->t->pagedir, swapped_page->vaddr, kp, swapped_page->writable);
     //printf("5.1.2end\n");
     lock_release(&frame_table_lock);
+
 
     return kp;
   }
