@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/priority.h"
   
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -89,11 +90,21 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  struct sleeping_thread* st = malloc(sizeof(struct sleeping_thread)); //Will point to the node to add to the sleeping thread list
+  struct list_elem* entry = list_remove(&thread_current()->elem); //Removes the element associated with the current thread from the ready list
+  struct thread* thread_to_stop = list_entry(entry, struct thread, elem); //Now we get the thread itself
+  st->t = thread_to_stop; //Assign the pointer to the current thread
+  st->tick_cutoff = timer_ticks() + ticks; //The cutoff for when the thread needs to go back to the ready list
+  list_push_front(&sleep_list, &st->elem); //Add the node to the sleep list
+  
+  enum intr_level old_level = intr_disable();
+  thread_block(); //Now put the current thread to sleep
+ // int64_t start = timer_ticks ();
 
+  intr_set_level(old_level);
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  //while (timer_elapsed (start) < ticks) 
+    //thread_yield ();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -170,8 +181,20 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-  ticks++;
-  thread_tick ();
+  ticks++; //Increment # of ticks since the OS booted
+  thread_tick (); //Used to update stats of the thread itself
+
+  for (struct list_elem* e = list_begin(&sleep_list); e != list_end (&sleep_list); e = list_next(e)) { //Go through the sleeping threads list to see if any of the threads are sleeping
+	struct sleeping_thread *st = list_entry(e, struct sleeping_thread, elem); //Get the list entry itself
+	if (st->tick_cutoff >= ticks) { //If the tick cutoff for the thread has passed the # of ticks since the OS booted
+	  struct thread *t = st->t; //Just to be safe, go ahead and get the data of the sleeping thread
+	  if (t == NULL) {
+	    printf("Hey");
+	  }
+	  list_remove(e); //Take the thread off the sleep list
+	  thread_unblock(t); //Add the thread back to the ready list
+	}
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
