@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "threads/priority.h"
   
 /* See [8254] for hardware details of the 8254 timer chip. */
 
@@ -20,6 +21,10 @@
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
+/* List of processes in THREAD_BLOCKED state, that is, processes
+   that are sleeping and will need to eventually move to the ready list. */
+static struct list sleep_list;
+
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
@@ -30,6 +35,7 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -37,6 +43,7 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  list_init (&sleep_list); //List of threads in THREAD_BLOCKED state (i.e. sleeping threads)
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -89,11 +96,27 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  enum intr_level old_level = intr_disable(); //Disable all interrupts (for synchronization)
+  thread_current()->tick_cutoff = timer_ticks() + ticks; //Let the thread know when it is supposed to wake up
+  list_insert(list_tail(&sleep_list), &thread_current()->elem); //This moves the thread from the ready list to the sleep list
+  thread_block(); //Move the thread to the blocked state (implicitly removes from ready list?)
+  intr_set_level(old_level); //Now we need to re-enable interrupts
 
-  ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  //struct sleeping_thread* st = malloc(sizeof(struct sleeping_thread)); //Will point to the node to add to the sleeping thread list
+  
+  /* Old implementation 
+  struct list_elem* entry = list_remove(&thread_current()->elem); //Removes the element associated with the current thread from the ready list
+  struct thread* thread_to_stop = list_entry(&thread_current()->elem, struct thread, elem); //Now we get the thread itself
+  st->t = thread_to_stop; //Assign the pointer to the current thread
+  st->tick_cutoff = timer_ticks() + ticks; //The cutoff for when the thread needs to go back to the ready list
+  list_push_front(&sleep_list, &st->elem); //Add the node to the sleep list
+  thread_block(); //Now put the current thread to sleep
+ // int64_t start = timer_ticks ();
+
+  intr_set_level(old_level); */
+  //ASSERT (intr_get_level () == INTR_ON);
+  //while (timer_elapsed (start) < ticks) 
+    //thread_yield ();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -170,8 +193,27 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-  ticks++;
-  thread_tick ();
+  ticks++; //Increment # of ticks since the OS booted
+  thread_tick (); //Used to update stats of the thread itself
+
+  //struct list_elem *e = list_begin(&sleep_list);
+  //struct thread *st = list_entry(e, struct thread, elem); //Get the list entry itself
+  for (struct list_elem* e = list_begin(&sleep_list); e != list_end (&sleep_list); e = list_next(e)) { //Go through the sleeping threads list to see if any of the threads are sleeping
+	struct thread *st = list_entry(e, struct thread, elem); //Get the list entry itself
+	if (ticks >= st->tick_cutoff) { //If the tick cutoff for the thread has passed the # of ticks since the OS booted
+	  list_remove(e); //Take the thread off the sleep list
+	  thread_unblock(st); //Add the thread back to the ready list
+	}
+  }
+/* Old implementation */
+  for (struct list_elem* e = list_begin(&sleep_list); e != list_end (&sleep_list); e = list_next(e)) { //Go through the sleeping threads list to see if any of the threads are sleeping
+	struct sleeping_thread *st = list_entry(e, struct sleeping_thread, elem); //Get the list entry itself
+	if (ticks >= st->tick_cutoff) { //If the tick cutoff for the thread has passed the # of ticks since the OS booted
+	  struct thread *t = st->t; //Just to be safe, go ahead and get the data of the sleeping thread
+	  list_remove(e); //Take the thread off the sleep list
+	  thread_unblock(t); //Add the thread back to the ready list
+	}
+  } */
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
