@@ -205,7 +205,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 	  thread_unblock(st); //Add the thread back to the ready list
 	}
   }
-/* Old implementation */
+/* Old implementation
   for (struct list_elem* e = list_begin(&sleep_list); e != list_end (&sleep_list); e = list_next(e)) { //Go through the sleeping threads list to see if any of the threads are sleeping
 	struct sleeping_thread *st = list_entry(e, struct sleeping_thread, elem); //Get the list entry itself
 	if (ticks >= st->tick_cutoff) { //If the tick cutoff for the thread has passed the # of ticks since the OS booted
