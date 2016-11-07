@@ -205,11 +205,17 @@ timer_interrupt (struct intr_frame *args UNUSED)
   //struct list_elem *e = list_begin(&sleep_list);
   //struct thread *st = list_entry(e, struct thread, elem); //Get the list entry itself
   //printf("%d", st->tick_cutoff);
-  for (struct list_elem* e = list_begin(&sleep_list); e != list_end (&sleep_list); e = list_next(e)) { //Go through the sleeping threads list to see if any of the threads are sleeping
+  struct list_elem* e = list_begin(&sleep_list); //Get the element at the head of the list
+  while (e != list_end(&sleep_list)) {
+  //for (struct list_elem* e = list_begin(&sleep_list); e != list_end (&sleep_list); e = list_next(e)) { //Go through the sleeping threads list to see if any of the threads are sleeping
 	struct thread *st = list_entry(e, struct thread, elem); //Get the list entry itself
 	if (ticks >= st->tick_cutoff) { //If the tick cutoff for the thread has passed the # of ticks since the OS booted
 	  list_remove(e); //Take the thread off the sleep list
 	  thread_unblock(st); //Add the thread back to the ready list
+	  e = list_begin(&sleep_list); //Now set e back to the start of the sleep list
+	}
+	else { //If it is not time to wake up the thread, then break, as you know the frontmost thread should wake up first
+		break;
 	}
   }
 
