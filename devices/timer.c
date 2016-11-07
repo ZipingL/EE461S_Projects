@@ -98,7 +98,13 @@ timer_sleep (int64_t ticks)
 {
   enum intr_level old_level = intr_disable(); //Disable all interrupts (for synchronization)
   thread_current()->tick_cutoff = timer_ticks() + ticks; //Let the thread know when it is supposed to wake up
-  list_insert(list_tail(&sleep_list), &thread_current()->elem); //This moves the thread from the ready list to the sleep list
+
+  if (!list_size(&sleep_list)) { //If there are no elements as of yet, a special exception needs to be made
+	list_insert(list_tail(&sleep_list), &thread_current()->elem);
+  }
+  else { //Otherwise, add the element normally
+	list_push_back(&sleep_list, &thread_current()->elem); //This moves the thread from the ready list to the sleep list
+  }
   thread_block(); //Move the thread to the blocked state (implicitly removes from ready list?)
   intr_set_level(old_level); //Now we need to re-enable interrupts
 
@@ -198,6 +204,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 
   //struct list_elem *e = list_begin(&sleep_list);
   //struct thread *st = list_entry(e, struct thread, elem); //Get the list entry itself
+  //printf("%d", st->tick_cutoff);
   for (struct list_elem* e = list_begin(&sleep_list); e != list_end (&sleep_list); e = list_next(e)) { //Go through the sleeping threads list to see if any of the threads are sleeping
 	struct thread *st = list_entry(e, struct thread, elem); //Get the list entry itself
 	if (ticks >= st->tick_cutoff) { //If the tick cutoff for the thread has passed the # of ticks since the OS booted
@@ -205,6 +212,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
 	  thread_unblock(st); //Add the thread back to the ready list
 	}
   }
+
 /* Old implementation
   for (struct list_elem* e = list_begin(&sleep_list); e != list_end (&sleep_list); e = list_next(e)) { //Go through the sleeping threads list to see if any of the threads are sleeping
 	struct sleeping_thread *st = list_entry(e, struct sleeping_thread, elem); //Get the list entry itself
