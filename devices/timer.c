@@ -105,7 +105,7 @@ timer_sleep (int64_t ticks)
   else { //Otherwise, add the element normally
 	list_push_back(&sleep_list, &thread_current()->elem); //This moves the thread from the ready list to the sleep list
   }
-  thread_block(); //Move the thread to the blocked state (implicitly removes from ready list?)
+  thread_block(); //Move the thread to the blocked state (this is also why the interrupts were disabled)
   intr_set_level(old_level); //Now we need to re-enable interrupts
 
   //struct sleeping_thread* st = malloc(sizeof(struct sleeping_thread)); //Will point to the node to add to the sleeping thread list
