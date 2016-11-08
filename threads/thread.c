@@ -21,6 +21,10 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
+
+/* Function prototypes */
+void sort_ready_list(struct list* list);
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -99,6 +103,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread->tick_cutoff = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -239,6 +244,7 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
+  sort_ready_list(&ready_list); //Now sort the ready list, after updating it
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
