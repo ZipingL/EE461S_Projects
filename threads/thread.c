@@ -23,7 +23,7 @@
 
 
 /* Function prototypes */
-void sort_ready_list(struct list* list);
+//void sort_ready_list(struct list* list);
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
@@ -226,6 +226,17 @@ thread_block (void)
   schedule ();
 }
 
+bool cmp_priorities(const struct list_elem *e1, const struct list_elem *e2) { //A function that was defined to help sort the ready list
+  struct thread *t1 = list_entry(e1, struct thread, elem);
+  struct thread *t2 = list_entry(e2, struct thread, elem);
+
+  if (t1->priority > t2->priority) {
+	return true;
+  }
+
+  return false;
+}
+
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)
@@ -244,7 +255,7 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem);
-  sort_ready_list(&ready_list); //Now sort the ready list, after updating it
+  list_sort(&ready_list, (list_less_func*) &cmp_priorities, NULL); //Now sort the ready list, after updating it
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
