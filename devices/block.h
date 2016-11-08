@@ -9,6 +9,7 @@
    disks.  It's not worth it to try to cater to other sector
    sizes in Pintos (yet). */
 #define BLOCK_SECTOR_SIZE 512
+#define SECTORS_PER_PAGE 4 // sizeof(page) / sizeof(sector) = 4048 / 512 = 4
 
 /* Index of a block device sector.
    Good enough for devices up to 2 TB. */

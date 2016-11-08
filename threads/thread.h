@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -85,7 +86,7 @@ struct thread
     /* Owned by thread.c. */
     tid_t tid;                          /* Thread identifier. */
     enum thread_status status;          /* Thread state. */
-    char name[16];                      /* Name (for debugging purposes). */
+    char name[40];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
@@ -94,13 +95,26 @@ struct thread
     struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
-    /* Owned by userprog/process.c. */
+
+    char full_name[40];
+    struct list child_list;     /* Every thread has its own list of children */
     uint32_t *pagedir;                  /* Page directory. */
+	  struct list fd_table;               /* A linked list to hold the thread's current files */
+    int fd_table_counter; /* Counts how many fd entries have been added
+                            For determining fd values to assign */
+   struct file * exec_fp;
+   bool load_failed;
+   struct child_list_elem *child_data; //Child can update its status for parent to see
+   struct list spt; // supplemental page table!
+   uint8_t* esp;
 #endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
+
+
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -123,7 +137,8 @@ struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
 
-void thread_exit (void) NO_RETURN;
+void thread_exit_process (int status) NO_RETURN;
+void thread_exit(void) NO_RETURN;
 void thread_yield (void);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
