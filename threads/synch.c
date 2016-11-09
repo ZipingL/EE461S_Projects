@@ -32,6 +32,9 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+/* A value to hold the current lock holder's priority */
+int priority;
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -196,8 +199,21 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
+  /* enum intr_level old_level = intr_disable();
+  if (lock->holder != NULL) {//If someone is not holding the lock right now
+	//Recall that thread_current() is trying to get the lock right now
+	if (thread_current()->priority > lock->holder->priority) { //If the current thread has a higher priority
+	  priority = lock->holder->priority; //Save the current lock holder's priority (so you can give it back later)
+	  lock->holder->priority = thread_current()->priority; //Give the higher priority to the currently executing process
+	}
+	sema_down (&lock->semaphore); //Now the current thread waits
+  } */
+  //else { //No need to do anything fancy
+	sema_down (&lock->semaphore); //Now the current thread waits
+  	lock->holder = thread_current ();
+  //}
+
+  //intr_set_level(old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -231,8 +247,18 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  /*enum intr_level old_level = intr_disable();
+  if (!list_empty(&lock->semaphore.waiters)) { //Was someone waiting for this lock?
+	thread_current()->priority = priority; //Then restore the releasing thread's priority
+	lock->holder = list_begin(&lock->semaphore.waiters); //The new lock holder is now the thread that was waiting for the lock
+  }
+  else { //No one was waiting
+    lock->holder = NULL;
+  } */
   lock->holder = NULL;
-  sema_up (&lock->semaphore);
+  sema_up (&lock->semaphore); //Signal the waiting thread
+
+  //intr_set_level(old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false

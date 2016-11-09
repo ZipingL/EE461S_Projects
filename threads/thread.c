@@ -25,6 +25,8 @@
 /* Function prototypes */
 //void sort_ready_list(struct list* list);
 
+//static struct lock lock;
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -256,6 +258,9 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   list_push_back (&ready_list, &t->elem); //Now add the thread to the ready list
   list_sort(&ready_list, (list_less_func*) &cmp_priorities, NULL); //Sort the ready list properly
+  struct list_elem *e = list_begin(&ready_list);
+  struct thread* value = list_entry(e, struct thread, elem);
+  //printf("%s", value->name); //Returns "thread 2"
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -353,6 +358,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  //Yield this thread if it does not have the highest priority in the ready list
   int max_priority = 0; //The least priority in the ready list
 
   struct list_elem* e = list_begin(&ready_list);
@@ -365,7 +371,6 @@ thread_set_priority (int new_priority)
   }
 
   thread_current ()->priority = new_priority;
-  //Yield this thread if it has the lowest priority in the ready list
   if (thread_current()->priority < max_priority) { //If the current thread's priority is lower than the maximum priority in the list
 	thread_yield();
   }
