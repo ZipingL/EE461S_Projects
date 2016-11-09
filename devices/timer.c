@@ -105,6 +105,7 @@ timer_sleep (int64_t ticks)
   else { //Otherwise, add the element normally
 	list_push_back(&sleep_list, &thread_current()->elem); //This moves the thread from the ready list to the sleep list
   }
+  //sort_ready_list(&ready_list); //Now sort the ready list, after updating it
   thread_block(); //Move the thread to the blocked state (this is also why the interrupts were disabled)
   intr_set_level(old_level); //Now we need to re-enable interrupts
 
