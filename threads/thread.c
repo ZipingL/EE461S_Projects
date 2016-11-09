@@ -254,8 +254,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
-  list_sort(&ready_list, (list_less_func*) &cmp_priorities, NULL); //Now sort the ready list, after updating it
+  list_push_back (&ready_list, &t->elem); //Now add the thread to the ready list
+  list_sort(&ready_list, (list_less_func*) &cmp_priorities, NULL); //Sort the ready list properly
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -326,7 +326,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_insert_ordered (&ready_list, &cur->elem, (list_less_func*) &cmp_priorities, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -353,7 +353,22 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  int max_priority = 0; //The least priority in the ready list
+
+  struct list_elem* e = list_begin(&ready_list);
+  while (e != list_end(&ready_list) && list_size(&ready_list)) {
+	struct thread *t = list_entry(e, struct thread, elem);
+	if (max_priority < t->priority) {
+	  max_priority = t->priority; //If you come across a higher priority in the list, set max priority
+	}
+    e = e->next;
+  }
+
   thread_current ()->priority = new_priority;
+  //Yield this thread if it has the lowest priority in the ready list
+  if (thread_current()->priority < max_priority) { //If the current thread's priority is lower than the maximum priority in the list
+	thread_yield();
+  }
 }
 
 /* Returns the current thread's priority. */
@@ -477,6 +492,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
+
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
