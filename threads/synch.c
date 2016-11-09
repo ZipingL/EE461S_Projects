@@ -200,7 +200,7 @@ lock_acquire (struct lock *lock)
   while (lock->holder != NULL) {//If someone is holding the lock right now
 	//Recall that thread_current() is trying to get the lock right now
 	if (thread_current()->priority > lock->holder->priority) { //If the current thread has a higher priority than the current lock holder's effective priority
-	  thread_current()->base_priority = lock->holder->priority; //Save the current lock holder's priority (so you can give it back later)
+	  lock->holder->base_priority = lock->holder->priority; //Save the current lock holder's priority (so you can give it back later)
 	  lock->holder->priority = thread_current()->priority; //Give the higher priority to the current lock holder
 	}
 	sema_down (&lock->semaphore); //Now the current thread waits
