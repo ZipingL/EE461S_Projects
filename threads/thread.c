@@ -22,10 +22,8 @@
 #define THREAD_MAGIC 0xcd6abf4b
 
 
-/* Function prototypes */
-//void sort_ready_list(struct list* list);
-
-//static struct lock lock;
+/* This is a flag that is set if the highest priority thread changes. It is used to reset the scheduler, hence its name */
+static bool reschedule_flag = false;
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
@@ -209,6 +207,10 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  if (reschedule_flag) { //Now we have to check if the highest priority thread changed
+	thread_yield();
+  }
+
   return tid;
 }
 
@@ -256,11 +258,37 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem); //Now add the thread to the ready list
+
+  int max_priority = 0; //The maximum priority before the current thread was added
+
+  struct list_elem* head = list_begin(&ready_list);
+  while (head != list_end(&ready_list) && list_size(&ready_list)) {
+	struct thread *t = list_entry(head, struct thread, elem);
+	if (max_priority < t->priority) {
+	  max_priority = t->priority; //If you come across a higher priority in the list, set max priority
+	}
+    head = head->next;
+  }
+
+  if (!list_size(&ready_list)) { //If there are no elements as of yet, a special exception needs to be made
+	list_insert(list_tail(&ready_list), &t->elem);
+  }
+  else { //Otherwise, add the element normally
+	list_push_back(&ready_list, &t->elem); //This moves the thread to the ready list
+  }
   list_sort(&ready_list, (list_less_func*) &cmp_priorities, NULL); //Sort the ready list properly
+  
   struct list_elem *e = list_begin(&ready_list);
-  struct thread* value = list_entry(e, struct thread, elem);
-  //printf("%s", value->name); //Returns "thread 2"
+  if (&t->elem == e && t->priority > max_priority) { //You may need to reset the scheduler so that it knows the highest priority thread that needs to run
+	reschedule_flag = true;
+  }
+  
+  /*while (e != list_end(&ready_list)) {
+    struct thread* value = list_entry(e, struct thread, elem);
+    printf("%d", value->priority); //Name returns "thread 2" and priority returns 32
+    e = e->next;
+  }
+   */
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
