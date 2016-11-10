@@ -21,7 +21,6 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
-
 /* This is a flag that is set if the highest priority thread changes. It is used to reset the scheduler, hence its name */
 static bool reschedule_flag = false;
 
@@ -279,8 +278,8 @@ thread_unblock (struct thread *t)
   list_sort(&ready_list, (list_less_func*) &cmp_priorities, NULL); //Sort the ready list properly
   
   struct list_elem *e = list_begin(&ready_list);
-  if (&t->elem == e && t->priority > max_priority) { //You may need to reset the scheduler so that it knows the highest priority thread that needs to run
-	reschedule_flag = true;
+  if (&t->elem == e) { //You may need to reset the scheduler so that it knows the highest priority thread that needs to run
+	reschedule_flag = true; //i.e. the highest priority thread just got pushed to the ready list, so the CPU needs to yield
   }
   
   /*while (e != list_end(&ready_list)) {
