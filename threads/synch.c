@@ -221,7 +221,6 @@ lock_acquire (struct lock *lock)
 
 	if (thread_current()->priority > lock->holder->priority) { //If the current thread has a higher priority than the current lock holder's effective priority
     //thread.set priority
-	  lock->holder->base_priority = lock->holder->priority; //Save the current lock holder's priority (so you can give it back later)
 	  lock->holder->priority = thread_current()->priority; //Give the higher priority to the current lock holder
 	}
   }
@@ -266,16 +265,22 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   enum intr_level old_level = intr_disable();
-  if (!list_empty(&lock->semaphore.waiters)) { //Was someone waiting for this lock?
-	thread_current()->priority = thread_current()->base_priority; //Then restore the releasing thread's priority
-	reschedule_flag = true; //Also make sure that the CPU is given to the next high priority thread
+  if (list_size(&lock->semaphore.waiters) != 0) { //Was someone waiting for this lock?
+	thread_set_priority(thread_current()->base_priority); //Then restore the releasing thread's priority
+  struct list_elem* e = list_begin(&lock->semaphore.waiters);
+  struct thread *t = list_entry(e, struct thread, elem);
+  lock->holder = t;
+  //t->priority = thread_current()->priority;
+	//reschedule_flag = true; //Also make sure that the CPU is given to the next high priority thread
   }
+  else {
   lock->holder = NULL;
-  sema_up (&lock->semaphore); //Signal the waiting thread
-
-  if (reschedule_flag) {
-  	thread_yield(); //Once you add to the ready list, go ahead and check which thread should get the CPU and modify the scheduler appropriately
   }
+  sema_up (&lock->semaphore); //Signal the waiting thread
+  thread_yield();
+  //if (reschedule_flag) {
+  //	thread_yield(); //Once you add to the ready list, go ahead and check which thread should get the CPU and modify the scheduler appropriately
+  //}
 
   intr_set_level(old_level);
 }
