@@ -183,6 +183,7 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
+  lock->currentPositionOfThreadArray=0;
   sema_init (&lock->semaphore, 1);
 }
 
@@ -202,30 +203,31 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   enum intr_level old_level = intr_disable();
+  //interrupts save old level
+  //disable
+  //set interrupt level back to original level
 
   if (lock->holder != NULL) {//If someone is holding the lock right now
 	//Recall that thread_current() is trying to get the lock right now
 
-	if (thread_current()->priority > lock->holder->priority) { //If the current thread has a higher priority than the current lock holder's effective priority
-    /*While loop deals with nested donation situation*/
-    /*Have an array of locks with threads that are waiting. Up to 8, as per docs*/
-    
-    struct lock *nextLock = lock->holder;
-    while(nextLock->holder!=NULL)
-    {
-      nextLock->holder->base_priority = nextLock->holder->priority; //Save the current lock holder's priority (so you can give it back later)
-      nextLock->holder->priority = thread_current()->priority; //Givlock->holder->priority the higher priority to the current lock holder
-      nextLock = nextLock->holder;
-    }
-    
-	  lock->holder->base_priority = lock->holder->priority; //Save the current lock holder's priority (so you can give it back later)
-	  lock->holder->priority = thread_current()->priority; //Givlock->holder->priority the higher priority to the current lock holder
-	}
+  /*Updates the locks the current thread holkds*/
+  thread_current()->locksThreadHolds[thread_current()->currentPositionOfLockArray] = lock;
+  thread_current()->currentPositionOfLockArray++;
 
-	//sema_down (&lock->semaphore); //Now the current thread waits
+  /*Updates the lock's list of threads it holds*/
+  lock->threadsThatHoldLock [lock->currentPositionOfThreadArray] = thread_current();
+  lock->currentPositionOfThreadArray++;
+
+
+	if (thread_current()->priority > lock->holder->priority) { //If the current thread has a higher priority than the current lock holder's effective priority
+    //thread.set priority
+	  lock->holder->base_priority = lock->holder->priority; //Save the current lock holder's priority (so you can give it back later)
+	  lock->holder->priority = thread_current()->priority; //Give the higher priority to the current lock holder
+	}
   }
+
 	sema_down (&lock->semaphore); //Now the current thread waits
-  if (lock->holder->priority == NULL) {
+  if (lock->holder == NULL) {
   	lock->holder = thread_current ();
   }
 

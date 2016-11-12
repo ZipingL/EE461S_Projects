@@ -88,10 +88,11 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Effective Priority. */
-	int base_priority;                       /* Base Priority. */
-	int64_t tick_cutoff;				/* The time when the thread should wake up */
+	  int base_priority;                       /* Base Priority. */
+	  int64_t tick_cutoff;				/* The time when the thread should wake up */
     struct list_elem allelem;           /* List element for all threads list. */
-
+    struct lock *locksThreadHolds[100];
+    int currentPositionOfLockArray;
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 

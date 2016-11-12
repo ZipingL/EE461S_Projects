@@ -103,6 +103,7 @@ thread_init (void)
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
   initial_thread->tick_cutoff = 0;
+  initial_thread->currentPositionOfLockArray=0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -560,10 +561,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-  {
-
-    return list_entry (list_max (&ready_list, (list_less_func*) &cmp_priorities, 0), struct thread, elem);
-  }
+    return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
