@@ -103,6 +103,7 @@ thread_init (void)
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
   initial_thread->tick_cutoff = 0;
+  initial_thread->heldLockIndex = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -187,6 +188,7 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  thread_current()->lower_priority = false;
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -385,6 +387,12 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  if ((thread_current()->heldLockIndex != 0 || thread_current()->heldLock[0] != NULL) && new_priority < thread_current()->priority) { //If a thread tries to lower its priority while holding a lock
+	thread_current()->lower_priority = true; //Set this flag to true
+    thread_current()->lower_pri = new_priority;
+	return;
+  }
+
   //Yield this thread if it does not have the highest priority in the ready list
   int max_priority = 0; //The least priority in the ready list
 
@@ -396,8 +404,9 @@ thread_set_priority (int new_priority)
 	}
     e = e->next;
   }
-
-  thread_current ()->priority = new_priority;
+  if (thread_current()->heldLockIndex == 0 && thread_current()->heldLock[0] == NULL) {
+  	thread_current ()->priority = new_priority;
+  }
   if (thread_current()->priority < max_priority) { //If the current thread's priority is lower than the maximum priority in the list
 	thread_yield();
   }

@@ -207,7 +207,7 @@ lock_acquire (struct lock *lock)
 	//Recall that thread_current() is trying to get the lock right now
 
 	if (thread_current()->priority > lock->holder->priority) { //If the current thread has a higher priority than the current lock holder's effective priority
-	  lock->holder->base_priority = lock->holder->priority; //Save the current lock holder's priority (so you can give it back later)
+	  //lock->holder->base_priority = lock->holder->priority; //Save the current lock holder's priority (so you can give it back later)
 	  lock->holder->priority = thread_current()->priority; //Give the higher priority to the current lock holder
 	}
 
@@ -216,6 +216,8 @@ lock_acquire (struct lock *lock)
 	sema_down (&lock->semaphore); //Now the current thread waits
   if (lock->holder == NULL) {
   	lock->holder = thread_current ();
+	thread_current()->heldLock[thread_current()->heldLockIndex] = lock; //So the current thread can keep track of which lock it has
+    thread_current()->heldLockIndex++;
   }
 
   intr_set_level(old_level);
@@ -252,6 +254,8 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  thread_current()->heldLock[thread_current()->heldLockIndex-1] = NULL; //So the current thread can keep track of which lock it has
+  thread_current()->heldLockIndex--;
   enum intr_level old_level = intr_disable();
   if (!list_empty(&lock->semaphore.waiters)) { //Was someone waiting for this lock?
 	thread_current()->priority = thread_current()->base_priority; //Then restore the releasing thread's priority
@@ -259,6 +263,10 @@ lock_release (struct lock *lock)
   }
   lock->holder = NULL;
   sema_up (&lock->semaphore); //Signal the waiting thread
+
+  if (thread_current()->lower_priority) { //If this thread was trying to lower its priority
+	thread_set_priority(thread_current()->lower_pri); //Finally lower it (as it will be releasing the lock)
+  }
 
   if (reschedule_flag) {
   	thread_yield(); //Once you add to the ready list, go ahead and check which thread should get the CPU and modify the scheduler appropriately

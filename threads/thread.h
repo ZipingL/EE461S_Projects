@@ -90,6 +90,10 @@ struct thread
     int priority;                       /* Effective Priority. */
 	int base_priority;                       /* Base Priority. */
 	int64_t tick_cutoff;				/* The time when the thread should wake up */
+	struct lock* heldLock[100];			/* A list of locks that the current thread holds. */
+	int heldLockIndex;
+	bool lower_priority;				/* If a thread tries to lower its priority while holding a lock, set this flag to true */
+    int lower_pri; 						/* The corresponding priority */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
