@@ -210,18 +210,20 @@ lock_acquire (struct lock *lock)
   if (lock->holder != NULL) {//If someone is holding the lock right now
 	//Recall that thread_current() is trying to get the lock right now
 
-  /*Updates the locks the current thread holkds*/
+  /*Updates the locks the current thread holds*/
   thread_current()->locksThreadHolds[thread_current()->currentPositionOfLockArray] = lock;
-  thread_current()->currentPositionOfLockArray++;
+  //sort here
+  thread_current()->currentPositionOfLockArray++; //so when sorting, just go up until (and including) currentPositionOfLockArray
 
   /*Updates the lock's list of threads it holds*/
   lock->threadsThatHoldLock [lock->currentPositionOfThreadArray] = thread_current();
-  lock->currentPositionOfThreadArray++;
-
+  //sort here
+  lock->currentPositionOfThreadArray++; //so when sorting, do same thing as above 
 
 	if (thread_current()->priority > lock->holder->priority) { //If the current thread has a higher priority than the current lock holder's effective priority
-    //thread.set priority
-	  lock->holder->priority = thread_current()->priority; //Give the higher priority to the current lock holder
+	  //update priority here.
+
+    lock->holder->priority = thread_current()->priority; //Give the higher priority to the current lock holder
 	}
   }
 
