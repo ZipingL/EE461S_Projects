@@ -209,29 +209,26 @@ lock_acquire (struct lock *lock)
   thread_current()->locksThreadHolds[thread_current()->currentElementInLockArray] = lock;   // may be wierd pointer error stuff here?
   thread_current()->currentElementInLockArray++;
 
-  struct list_elem* e = list_begin(&lock->semaphore.waiters);
-  struct thread *t = list_entry(e, struct thread, elem);
-
-
-	if (thread_current()->priority > lock->holder->priority) { //If the current thread has a higher priority than the current lock holder's effective priority
+  if (thread_current()->priority > lock->holder->priority) { //If the current thread has a higher priority than the current lock holder's effective priority
     lock->holder->priority = thread_current()->priority; //Give the higher priority to the current lock holder
   }
-//  if(thread_current()->priority > t->priority)
- // {
-    /*Go through and upgrade every one who is waiting on the lock*/
- //   if (list_size(&lock->semaphore.waiters) != 0) { //Was someone waiting for this lock? If so...
-      /*Go through the list and update everyone's priorities*/
- //       while (e != list_end(&lock->semaphore.waiters) && list_size(&lock->semaphore.waiters)) {
- //       struct thread *t = list_entry(e, struct thread, elem);
- //       if(thread_current()->priority > t->priority)
-//        {
- //         t->priority = thread_current()->priority; 
- //       }
- //       e = e->next;
-//       }
-//    }
-	//}
+
 }
+
+ /*Go through and upgrade every one who is waiting on the lock*/
+//if (list_size(&lock->semaphore.waiters) != 0) { //Was someone waiting for this lock? If so...
+  /*Go through the list and update everyone's priorities*/
+//  struct list_elem* e = list_begin(&lock->semaphore.waiters);
+//  while (e != list_end(&lock->semaphore.waiters) && list_size(&lock->semaphore.waiters)) {
+//  struct thread *t = list_entry(e, struct thread, elem);
+//      if(thread_current()->priority > t->priority)
+//      {
+//        t->priority = thread_current()->priority; 
+//     }
+//  e = e->next;
+// }
+      
+// }
 
 	sema_down (&lock->semaphore); //Now the current thread waits
   /*Updates the current lock holder*/
@@ -274,6 +271,7 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   enum intr_level old_level = intr_disable();
+
   if (list_size(&lock->semaphore.waiters) != 0) { //Was someone waiting for this lock? If so...
 
   /*Find max of locks held by current thread*/
@@ -294,15 +292,25 @@ lock_release (struct lock *lock)
   struct list_elem* e = list_begin(&lock->semaphore.waiters);
   struct thread *t = list_entry(e, struct thread, elem);
   lock->holder = t;
+
+  /*Goes through the array and switches the lock you want to release to the end of the array, and switch the elements to NULL*/
+  for (int i = 0; i < thread_current()->currentElementInLockArray; i++)
+  {
+    if(thread_current()->locksThreadHolds[i] = lock)
+    {
+      thread_current()->locksThreadHolds[i] = thread_current()->locksThreadHolds[thread_current()->currentElementInLockArray-1];
+      thread_current()->locksThreadHolds[thread_current()->currentElementInLockArray-1] = NULL;
+      thread_current()->currentElementInLockArray--;
+      break;
+    }
+  }
+
   }
   else {
   lock->holder = NULL;
   }
   sema_up (&lock->semaphore); //Signal the waiting thread
   thread_yield();
-  //if (reschedule_flag) {
-  //	thread_yield(); //Once you add to the ready list, go ahead and check which thread should get the CPU and modify the scheduler appropriately
-  //}
 
   intr_set_level(old_level);
 }

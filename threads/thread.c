@@ -399,7 +399,6 @@ thread_set_priority (int new_priority)
 	}
     e = e->next;
   }
-
   thread_current ()->priority = new_priority;
   if (thread_current()->priority < max_priority) { //If the current thread's priority is lower than the maximum priority in the list
 	thread_yield();
