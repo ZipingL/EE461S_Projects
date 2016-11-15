@@ -261,7 +261,7 @@ lock_release (struct lock *lock)
 
   /*Find max of locks held by current thread*/
   /*Nested donation implemented here*/
-  int max = 0;
+  int max = thread_current()->base_priority;
   /*if thread holds any locks, choose priority based on highest lock it holds. By highest, I mean the highest priority thread in that lock*/
   for (int i = 0; i < thread_current()->currentElementInLockArray; i++)
   {
