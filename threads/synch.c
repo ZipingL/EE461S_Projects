@@ -209,12 +209,29 @@ lock_acquire (struct lock *lock)
   thread_current()->locksThreadHolds[thread_current()->currentElementInLockArray] = lock;   // may be wierd pointer error stuff here?
   thread_current()->currentElementInLockArray++;
 
+  struct list_elem* e = list_begin(&lock->semaphore.waiters);
+  struct thread *t = list_entry(e, struct thread, elem);
+
 
 	if (thread_current()->priority > lock->holder->priority) { //If the current thread has a higher priority than the current lock holder's effective priority
-	  //update priority here.
     lock->holder->priority = thread_current()->priority; //Give the higher priority to the current lock holder
-	}
   }
+//  if(thread_current()->priority > t->priority)
+ // {
+    /*Go through and upgrade every one who is waiting on the lock*/
+ //   if (list_size(&lock->semaphore.waiters) != 0) { //Was someone waiting for this lock? If so...
+      /*Go through the list and update everyone's priorities*/
+ //       while (e != list_end(&lock->semaphore.waiters) && list_size(&lock->semaphore.waiters)) {
+ //       struct thread *t = list_entry(e, struct thread, elem);
+ //       if(thread_current()->priority > t->priority)
+//        {
+ //         t->priority = thread_current()->priority; 
+ //       }
+ //       e = e->next;
+//       }
+//    }
+	//}
+}
 
 	sema_down (&lock->semaphore); //Now the current thread waits
   /*Updates the current lock holder*/
@@ -262,7 +279,7 @@ lock_release (struct lock *lock)
   /*Find max of locks held by current thread*/
   /*Nested donation implemented here*/
   int max = thread_current()->base_priority;
-  /*if thread holds any locks, choose priority based on highest lock it holds. By highest, I mean the highest priority thread in that lock*/
+  /*if thread holds any locks, choose priority based on highest lock it holds. By highest, I mean the highest priority thread in that lock's semaphore list*/
   for (int i = 0; i < thread_current()->currentElementInLockArray; i++)
   {
     struct list_elem* head = list_begin(&thread_current()->locksThreadHolds[i]->semaphore.waiters);
@@ -271,7 +288,6 @@ lock_release (struct lock *lock)
     {
       max = t->priority;
     }
-    head = head->next;
   }
 
 	thread_set_priority(max); //Then restore the releasing thread's priority
