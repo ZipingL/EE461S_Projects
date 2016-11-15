@@ -96,14 +96,14 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list); //List of threads in THREAD_READY state
   list_init (&all_list); //List of all the running threads
-
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
+  list_init (initial_thread->locksThreadHolds);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
   initial_thread->tick_cutoff = 0;
-  initial_thread->currentPositionOfLockArray=0;
+  initial_thread->currentElementInLockArray = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -241,6 +241,7 @@ bool cmp_priorities(const struct list_elem *e1, const struct list_elem *e2) { //
 
   return false;
 }
+
 
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to

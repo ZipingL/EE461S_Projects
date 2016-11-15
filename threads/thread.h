@@ -91,10 +91,11 @@ struct thread
 	  int base_priority;                       /* Base Priority. */
 	  int64_t tick_cutoff;				/* The time when the thread should wake up */
     struct list_elem allelem;           /* List element for all threads list. */
-    struct lock *locksThreadHolds[100];
-    int currentPositionOfLockArray;
+    struct lock *locksThreadHolds[30];     //just needs to be pointers to locks. Default set to 30
+    int currentElementInLockArray;    //points to first NULL element
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct list_elem lock_element;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

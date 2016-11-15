@@ -32,8 +32,6 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-static bool reschedule_flag = false;
-
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -183,7 +181,6 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
-  lock->currentPositionOfThreadArray=0;
   sema_init (&lock->semaphore, 1);
 }
 
@@ -203,31 +200,24 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   enum intr_level old_level = intr_disable();
-  //interrupts save old level
-  //disable
-  //set interrupt level back to original level
+
 
   if (lock->holder != NULL) {//If someone is holding the lock right now
 	//Recall that thread_current() is trying to get the lock right now
 
-  /*Updates the locks the current thread holds*/
-  thread_current()->locksThreadHolds[thread_current()->currentPositionOfLockArray] = lock;
-  //sort here
-  thread_current()->currentPositionOfLockArray++; //so when sorting, just go up until (and including) currentPositionOfLockArray
-
   /*Updates the lock's list of threads it holds*/
-  lock->threadsThatHoldLock [lock->currentPositionOfThreadArray] = thread_current();
-  //sort here
-  lock->currentPositionOfThreadArray++; //so when sorting, do same thing as above 
+  thread_current()->locksThreadHolds[thread_current()->currentElementInLockArray] = lock;   // may be wierd pointer error stuff here?
+  thread_current()->currentElementInLockArray++;
+
 
 	if (thread_current()->priority > lock->holder->priority) { //If the current thread has a higher priority than the current lock holder's effective priority
 	  //update priority here.
-
     lock->holder->priority = thread_current()->priority; //Give the higher priority to the current lock holder
 	}
   }
 
 	sema_down (&lock->semaphore); //Now the current thread waits
+  /*Updates the current lock holder*/
   if (lock->holder == NULL) {
   	lock->holder = thread_current ();
   }
@@ -267,13 +257,27 @@ lock_release (struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
 
   enum intr_level old_level = intr_disable();
-  if (list_size(&lock->semaphore.waiters) != 0) { //Was someone waiting for this lock?
-	thread_set_priority(thread_current()->base_priority); //Then restore the releasing thread's priority
+  if (list_size(&lock->semaphore.waiters) != 0) { //Was someone waiting for this lock? If so...
+
+  /*Find max of locks held by current thread*/
+  /*Nested donation implemented here*/
+  int max = 0;
+  /*if thread holds any locks, choose priority based on highest lock it holds. By highest, I mean the highest priority thread in that lock*/
+  for (int i = 0; i < thread_current()->currentElementInLockArray; i++)
+  {
+    struct list_elem* head = list_begin(&thread_current()->locksThreadHolds[i]->semaphore.waiters);
+    struct thread *t = list_entry(head, struct thread, elem);
+    if(t->priority > max)
+    {
+      max = t->priority;
+    }
+    head = head->next;
+  }
+
+	thread_set_priority(max); //Then restore the releasing thread's priority
   struct list_elem* e = list_begin(&lock->semaphore.waiters);
   struct thread *t = list_entry(e, struct thread, elem);
   lock->holder = t;
-  //t->priority = thread_current()->priority;
-	//reschedule_flag = true; //Also make sure that the CPU is given to the next high priority thread
   }
   else {
   lock->holder = NULL;
@@ -388,3 +392,18 @@ cond_broadcast (struct condition *cond, struct lock *lock)
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
 }
+
+/*Unimplemented
+void 
+sort_threads_that_hold_lock()
+{
+  struct list_elem* e = list_begin(&ready_list);
+  while (e != list_end(&ready_list) && list_size(&ready_list)) {
+  struct thread *t = list_entry(e, struct thread, elem);
+  if (max_priority < t->priority) {
+    max_priority = t->priority; //If you come across a higher priority in the list, set max priority
+  }
+    e = e->next;
+  }
+}
+*/
