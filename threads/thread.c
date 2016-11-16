@@ -390,7 +390,11 @@ thread_set_priority (int new_priority)
 {
   //Yield this thread if it does not have the highest priority in the ready list
   int max_priority = 0; //The least priority in the ready list
-
+  if (thread_current()->locksThreadHolds[0] != NULL && new_priority < thread_current()->priority) { //If the current thread holds a lock and you are trying to lower the priority
+    thread_current()->lower_priority = true; //So you remember to change it later
+    thread_current()->lower_pri = new_priority;
+    return; //Don't change the priority
+  }
   struct list_elem* e = list_begin(&ready_list);
   while (e != list_end(&ready_list) && list_size(&ready_list)) {
 	struct thread *t = list_entry(e, struct thread, elem);

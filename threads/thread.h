@@ -91,8 +91,10 @@ struct thread
 	  int base_priority;                       /* Base Priority. */
 	  int64_t tick_cutoff;				/* The time when the thread should wake up */
     struct list_elem allelem;           /* List element for all threads list. */
-    struct lock *locksThreadHolds[30];     //just needs to be pointers to locks. Default set to 30
+    struct lock *locksThreadHolds[100];     //just needs to be pointers to locks. Default set to 30
     int currentElementInLockArray;    //points to first NULL element
+    bool lower_priority;        /* If a thread tries to lower its priority while holding a lock, set this flag to true */
+    int lower_pri;            /* The corresponding priority */
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     struct list_elem lock_element;
