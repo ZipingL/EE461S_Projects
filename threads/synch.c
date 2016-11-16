@@ -209,27 +209,23 @@ lock_acquire (struct lock *lock)
     lock->holder->priority = thread_current()->priority; //Give the higher priority to the current lock holder
   }
 
+  /*Nested priority donation*/
+  if(lock->holder->currentElementInLockArray != 0)  // there exists locks in array
+  {
+    for(int i = 0; i < lock->holder->currentElementInLockArray; i++)
+      {
+        if(lock->holder->locksThreadHolds[i] != NULL)
+        {
+          lock->holder->locksThreadHolds[i]->holder->priority = thread_current()->priority;
+        }
+      }
+  }
+
   }
 
   /*Updates the lock's list of threads it holds*/
   thread_current()->locksThreadHolds[thread_current()->currentElementInLockArray] = lock;   // may be wierd pointer error stuff here?
   thread_current()->currentElementInLockArray++;
-
-  
- /*Go through and upgrade every one who is waiting on the lock*/
- // if (list_size(&lock->semaphore.waiters) != 0) { //Was someone waiting for this lock? If so...
-  /*Go through the list and update everyone's priorities*/
- // struct list_elem* e = list_begin(&lock->semaphore.waiters);
- // while (e != list_end(&lock->semaphore.waiters) && list_size(&lock->semaphore.waiters)) {
- // struct thread *t = list_entry(e, struct thread, elem);
- //     if(thread_current()->priority > t->priority)
- //     {
- //       t->priority = thread_current()->priority; 
- //   }
- // e = e->next;
-// }
-      
- //}
 
 	sema_down (&lock->semaphore); //Now the current thread waits
   /*Updates the current lock holder*/
@@ -274,7 +270,7 @@ lock_release (struct lock *lock)
   enum intr_level old_level = intr_disable();
 
   if (list_size(&lock->semaphore.waiters) != 0) { //Was someone waiting for this lock? If so...
-
+  /**/
   struct list_elem* e = list_begin(&lock->semaphore.waiters);
   struct thread *t = list_entry(e, struct thread, elem);
   lock->holder = t;
