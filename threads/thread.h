@@ -96,6 +96,8 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     struct list_elem lock_element;
+	bool lower_priority;				/* If a thread tries to lower its priority while holding a lock, set this flag to true */
+    int lower_pri; 						/* The corresponding priority */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

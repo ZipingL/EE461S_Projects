@@ -311,7 +311,11 @@ else {
     }
   }
 
-  thread_set_priority(max); //Then restore the releasing thread's priority
+  thread_current ()->priority = max; //Then restore the releasing thread's priority
+
+  if (thread_current()->lower_priority) { //If this thread was trying to lower its priority
+	thread_set_priority(thread_current()->lower_pri); //Finally lower it (as it will be releasing the lock)
+  }
   thread_yield();
 
   intr_set_level(old_level);

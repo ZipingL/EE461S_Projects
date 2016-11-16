@@ -388,6 +388,12 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  if (thread_current()->locksThreadHolds[0] != NULL && new_priority < thread_current()->priority) { //If the current thread holds a lock and you are trying to lower the priority
+	thread_current()->lower_priority = true; //So you remember to change it later
+	thread_current()->lower_pri = new_priority;
+	return; //Don't change the priority
+  }
+
   //Yield this thread if it does not have the highest priority in the ready list
   int max_priority = 0; //The least priority in the ready list
 

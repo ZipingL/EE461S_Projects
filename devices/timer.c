@@ -21,6 +21,10 @@
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
+/* List of processes in THREAD_BLOCKED state, that is, processes
+   that are sleeping and will need to eventually move to the ready list. */
+static struct list sleep_list;
+
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
