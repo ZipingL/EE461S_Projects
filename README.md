@@ -1,5 +1,6 @@
- Project2 - Process API and SysCalls
-
+#Project2 - Process API and SysCalls
+##TEST STATUS
+Project Userprogs: ALL TESTS PASSING 
 This is the [User Programs][userprog] project in Pintos. To get started:
 
 - Form a team of 3 members
@@ -16,23 +17,8 @@ This is the [User Programs][userprog] project in Pintos. To get started:
 - Tests Fail/Pass Status (Update this every time you push with what you see in make check,
 please never push if you cause tests to fail that weren't failing already)
 
-#TEST STATUS
-- FAIL tests/userprog/no-vm/multi-oom
-No idea whats going on with this one^
-- All test cases working (except for the sporadic case above, but that's just extra credit anyway)
-- Writing the wiki page to document the project
 
-#Project 3
-- Read about the project here: https://web.stanford.edu/class/cs140/projects/pintos/pintos_4.html
-- Suggested Order of Implementation:
-	- Frame table (without swapping). Once complete, all project 2 test cases should still be passing
-	- Supplemental Page Table
-	- Page fault handler. Kernel should pass all projecct 2 test cases, but only some of the robustness cases (?)
-	- Stack growth
-	- Mapped files
-	- Page reclamation on process exit (the last three can be done in parallel)
-	- Eviction
-- I would focus on trying the last couple of problems on the practice exam, because it really does give you a good idea of how paging works and so would really clear up your understanding before you just start writing code.
+
 
 <!-- Links -->
 [userprog]: https://web.stanford.edu/class/cs140/projects/pintos/pintos_3.html#SEC32
